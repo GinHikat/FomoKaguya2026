@@ -11,3 +11,11 @@ cp .env.example .env
 ```
 
 secret/ggsheet_credentials.json and .env will be given later
+
+After getting the .env and ggsheet credentials, run this to download the data
+
+```bash
+python download_asset.py
+
+#Choose the id of dataset
+```
