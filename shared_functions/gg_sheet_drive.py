@@ -7,14 +7,19 @@ To use these functions, grant the "Editor" permission to the service account ema
 Link to sheet: https://docs.google.com/spreadsheets/d/1xBgBiA1KwTNdqPfrqH5p_Sf-MhTCXMfy4ousb0WE4Ik/edit
 
 Link to drive: https://drive.google.com/drive/folders/16dRxPz4tVDPScwuYOQ_U5opRdg96qW9W?usp=drive_link
+
+Usable functions:
+    1. gs_to_df_pandas(tab_name): from ggsheet to df
+    2. gs_to_dict(tab_name): from ggsheet to dict
+    3. write_df_to_gs(df, tab_name): from df to ggsheet
+    4. list_drive_files(): list all files in google drive
+    5. read_drive_files(file_name): return file content, input just file name no need for path
+    6. count_files_by_folder_name(folder_name): return number of files and file names in a folder 
 '''
 import io, sys, os
 import gspread
 import pandas as pd
 import json
-# from pydrive.auth import GoogleAuth
-# from pydrive.drive import GoogleDrive
-# from oauth2client.service_account import ServiceAccountCredentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 

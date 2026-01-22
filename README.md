@@ -19,3 +19,17 @@ python download_asset.py
 
 #Choose the id of dataset
 ```
+
+Some notes about using shared_functions
+
+```python
+import os
+
+project_root = os.path.abspath(os.path.join(os.getcwd(), "../.."))
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
+from shared_functions.gg_sheet_drive import *
+```
+
+Then follow the instruction docstring in the beginning of the file @shared_functions/gg_sheet_drive
