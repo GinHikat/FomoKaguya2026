@@ -4,9 +4,8 @@ To use these functions, grant the "Editor" permission to the service account ema
 
 "gg-service-agent@legalrag-471601.iam.gserviceaccount.com" 
 
-Link to sheet: https://docs.google.com/spreadsheets/d/1xBgBiA1KwTNdqPfrqH5p_Sf-MhTCXMfy4ousb0WE4Ik/edit
-
-Link to drive: https://drive.google.com/drive/folders/16dRxPz4tVDPScwuYOQ_U5opRdg96qW9W?usp=drive_link
+Link to sheet: https://docs.google.com/spreadsheets/d/1sxKBJDVq5nN1HgkmLO73oFDcCto9LREXzm6hTKj97Qc/edit?usp=sharing
+Link to drive: https://drive.google.com/drive/u/0/folders/1_ruI-I7tAyYvLbuTZV7CP7xB0KgvIJYa
 
 Usable functions:
     1. gs_to_df_pandas(tab_name): from ggsheet to df
