@@ -12,12 +12,14 @@ cp .env.example .env
 
 secret/ggsheet_credentials.json and .env will be given later
 
-After getting the .env and ggsheet credentials, run this to download the data
+Run this to download the data
 
 ```bash
-python download_asset.py
+mkdir data
 
-#Choose the id of dataset
+cd data
+
+git clone https://huggingface.co/datasets/zinzinmit/Fomokaguya2026
 ```
 
 Some notes about using shared_functions
