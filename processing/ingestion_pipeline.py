@@ -54,3 +54,39 @@ def extract_info(line, return_df = False):
         return pd.DataFrame([d])
         
     return d
+
+def batch_streaming_ingestion(original_path, batch_size = 50000, output_path = 'output.csv'):
+
+    fieldnames = list(extract_info(lines[0]).keys())
+
+    with open(output_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+    writer.writeheader()
+
+    total = len(lines)
+
+    for start in tqdm(range(0, total, BATCH_SIZE), desc="Batches"):
+        end = min(start + BATCH_SIZE, total)
+        batch = lines[start:end]
+
+        buffer = []
+        bad = 0
+
+        for line in batch:
+            try:
+                d = extract_info(line)
+                if d is not None:      
+                    buffer.append(d)
+                else:
+                    bad += 1
+            except Exception:
+                bad += 1
+
+        if buffer:
+            writer.writerows(buffer)
+            f.flush()
+            os.fsync(f.fileno())
+
+        print(f"Batch {start//batch_size + 1}: "
+              f"written {len(buffer)}, bad {bad}")
+
