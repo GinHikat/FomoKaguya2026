@@ -17,3 +17,13 @@ os.makedirs(data_original_dir, exist_ok=True)
 hf_hub_download(repo_id="zinzinmit/Fomokaguya2026", filename="original/test.txt", local_dir=data_dir, repo_type="dataset")
 
 hf_hub_download(repo_id="zinzinmit/Fomokaguya2026", filename="original/train.txt", local_dir=data_dir, repo_type="dataset")
+
+data_processed_dir = os.path.join(data_dir, "processed")
+
+os.makedirs(data_processed_dir, exist_ok=True)
+
+hf_hub_download(repo_id="zinzinmit/Fomokaguya2026", filename="processed/test.csv", local_dir=data_dir, repo_type="dataset")
+
+hf_hub_download(repo_id="zinzinmit/Fomokaguya2026", filename="processed/train.csv", local_dir=data_dir, repo_type="dataset")
+
+hf_hub_download(repo_id="zinzinmit/Fomokaguya2026", filename="processed/for_visualization.csv", local_dir=data_dir, repo_type="dataset")
