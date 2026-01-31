@@ -188,6 +188,7 @@ class Predictor():
         data_X = df[input_cols].values.astype(np.float32)
         data_y = df[target_col].values.astype(np.float32)
 
+
         for i in range(len(df) - self.window_size):
             X.append(data_X[i : i + self.window_size])
             y.append(data_y[i + self.window_size])
@@ -209,7 +210,7 @@ class Predictor():
             y: (batch_size,)
         '''   
         
-        X, y = self.for_dl_input(df, window_size=self.window_size)
+        X, y = self.for_dl_input(df)
 
         X = np.asarray(X).reshape(X.shape[0], -1)
 
