@@ -12,24 +12,25 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using:", device)
 
 class LSTM(nn.Module):
-    def __init__(self, input_size, lstm_hidden=128, mlp_hidden1=64, mlp_hidden2=32,
+    def __init__(self, input_size, lstm_hidden=64, mlp_hidden1=32, mlp_hidden2=16,
         output_size=1, dropout=0.0):
         super().__init__()
-        self.lstm = nn.LSTM(input_size=input_size, hidden_size=lstm_hidden,
-        batch_first=True, num_layers=2, dropout=dropout)
+        self.lstm = nn.LSTM(input_size=input_size, hidden_size=lstm_hidden//2,
+        batch_first=True, num_layers=2, dropout=dropout, bidirectional = True)
+        self.norm = nn.LayerNorm(lstm_hidden)
         self.mlp = nn.Sequential(
-        nn.Linear(lstm_hidden, mlp_hidden1),
-        nn.ReLU(),
-        nn.Dropout(dropout),
-        nn.Linear(mlp_hidden1, mlp_hidden2),
-        nn.ReLU(),
-        nn.Dropout(dropout),
-        nn.Linear(mlp_hidden2, output_size)
-        )
+            nn.Linear(lstm_hidden, mlp_hidden1),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(mlp_hidden1, mlp_hidden2),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(mlp_hidden2, output_size)
+            )
         
     def forward(self, x):
         lstm_out, _ = self.lstm(x) 
-        last_out = lstm_out[:, -1, :] 
+        last_out = self.norm(lstm_out[:, -1, :]) 
         return self.mlp(last_out)
 
 class MultiHeadSelfAttention(nn.Module):
@@ -169,7 +170,7 @@ class Transformer(nn.Module):
         return output
 
 class LSTMSelfAttention(nn.Module):
-    def __init__(self, input_size=1, hidden_dim=64):
+    def __init__(self, input_size=1, hidden_dim=128):
         super().__init__()
 
         self.lstm = nn.LSTM(
@@ -180,7 +181,7 @@ class LSTMSelfAttention(nn.Module):
         )
 
         self.norm = nn.LayerNorm(hidden_dim)
-        self.attention = MultiHeadSelfAttention(hidden_dim, num_heads=4)
+        self.attention = MultiHeadSelfAttention(hidden_dim, num_heads=8)
         self.fc = nn.Linear(hidden_dim, 1)
 
     def forward(self, x):
@@ -223,8 +224,8 @@ class DL():
         model = model.to(device)
         model.eval()
         with torch.no_grad():
-            X_test_tensor = torch.tensor(X_test, dtype=torch.float32).to(device)
-            y_pred_tensor = model(X_test_tensor).cpu()
+            X_tensor = torch.tensor(X, dtype=torch.float32).to(device)
+            y_pred_tensor = model(X_tensor).cpu()
 
         y_pred = y_pred_tensor.numpy().ravel()
 

@@ -241,19 +241,19 @@ class Predictor():
 
         for key, value in model_type.items():
             if self.model_name in value:
-                model = key
+                model_ = key
                 break
         
         # get processing function based on model type
-        input_fn = getattr(self, f"{model}_input")
+        input_fn = getattr(self, f"{model_}_input")
 
         X, y = input_fn(df)
 
-        if model == 'dl':
+        if model_ == 'dl':
             model = DL(model_name = self.model_name, input_dim = X.shape[-1])
-        elif model == 'rvfl':
+        elif model_ == 'rvfl':
             model = rvfl(model_name = self.model_name)
-        elif model == 'ml':
+        elif model_ == 'ml':
             model = ML(model_name = self.model_name)
         
         y_pred = model.predict(X)
