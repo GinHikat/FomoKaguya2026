@@ -50,8 +50,7 @@ def main():
         config = yaml.safe_load(f)
         
     # Data Data
-    data_path = "data/processed/test.csv" # Adjust relative path
-    # If file doesn't exist, try absolute or synthetic
+    data_path = "data/processed/test.csv" 
     load_data_series = load_data(data_path, interval=config["simulation"]["interval"])
     
     # Cost Model
@@ -66,7 +65,7 @@ def main():
     }
     
     # Run DP Optimizer (Pre-compute)
-    print("Running DP Optimizer (this may take a moment)...")
+    print("Running DP Optimizer...")
     dp = DPOptimizer(config, cost_model, load_data_series)
     dp.optimize()
     dp_trajectory = dp.reconstruct_path()
@@ -95,32 +94,19 @@ def main():
     results = {}
     
     # Load Forecasts
-    print("Generating Forecasts (this may take a moment)...")
-    # Note: data_path is relative to script when using os.path logic, but get_forecasts takes direct path
-    # We used relative path "data/processed/train.csv" earlier.
-    # Let's verify path resolution in get_forecasts vs here.
-    # get_forecasts calls read_csv(path).
-    # ensure full path is passed if needed.
+    print("Generating Forecasts...")
     full_data_path = os.path.abspath(data_path)
-    
-    # Also we need to make sure 'forecasting' config exists
-    if "forecasting" not in config:
-        config["forecasting"] = {"model": "bilstm_attention", "window_size": 60}
         
     forecasts, actuals_aligned = get_forecasts(full_data_path, config)
     
-    # If forecasts are empty (failure), fallback to Oracle? or Zeros?
     if len(forecasts) == 0:
         print("Forecasting failed or no data. Falling back to Oracle (Actuals).")
         predictions = load_data_series
     else:
+        print(f"Using Real Forecast Model: {config.get('forecasting', {}).get('model', 'Unknown')}")
         predictions = forecasts
-        # Use aligned actuals for simulation to match length?
-        # Simulation usually runs on 'load_data_series'. 
-        # Check if lengths match.
         if len(predictions) != len(load_data_series):
              print(f"Warning: Forecast length {len(predictions)} != Data length {len(load_data_series)}. Truncating/Padding.")
-             # Usually forecaster_integration handles alignment to aggregated data. Just use what matches.
     
     for name in policies:
         print(f"Running {name}...")

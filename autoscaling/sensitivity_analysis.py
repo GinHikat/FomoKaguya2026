@@ -2,7 +2,6 @@ import os
 import sys
 import yaml
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from tqdm import tqdm
@@ -12,7 +11,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from cost_model import CostModel
 from simulator import Simulator
-from policies import HybridPolicy, ReactivePolicy
+from policies import HybridPolicy
 from run_simulation import load_data
 
 def run_sensitivity_analysis(config_path=None):
@@ -26,8 +25,22 @@ def run_sensitivity_analysis(config_path=None):
     # Load Data
     data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../data/processed/test.csv")
     load_series = load_data(data_path, interval="1min")
-    # Use Oracle predictions for sensitivity analysis to isolate cost param effects
-    predictions = load_series 
+    
+    # Try using Real Forecasts
+    from forecaster_integration import get_forecasts
+    full_data_path = os.path.abspath(data_path)
+         
+    forecasts, _ = get_forecasts(full_data_path, base_config)
+    
+    if len(forecasts) == 0:
+        print("Sensitivity Analysis: Forecasting failed or no data. Falling back to Oracle (Actuals).")
+        predictions = load_series
+    else:
+        print(f"Sensitivity Analysis: Using Real Forecast Model ({base_config['forecasting']['model']}).")
+        predictions = forecasts
+        # Align lengths if needed
+        if len(predictions) != len(load_series):
+             print(f"Warning: Forecast length {len(predictions)} != Data length {len(load_series)}. Truncating/Padding.") 
     
     # Parameters to sweep
     violation_costs = [1e-6, 5e-6, 1e-5, 5e-5] 
@@ -77,21 +90,18 @@ def run_sensitivity_analysis(config_path=None):
     print(df_results)
     
     # Plot Heatmap
-    try:
-        pivot_table = df_results.pivot(index="Violation Cost", columns="Startup Time", values="Total Cost")
+    pivot_table = df_results.pivot(index="Violation Cost", columns="Startup Time", values="Total Cost")
+    
+    plt.figure(figsize=(10, 8), dpi=200)
+    sns.heatmap(pivot_table, annot=True, fmt=".0f", cmap="viridis_r")
+    plt.title("Total Cost Sensitivity: Hybrid Policy")
+    plt.xlabel("Startup Time (min)")
+    plt.ylabel("Violation Cost ($/Byte)")
         
-        plt.figure(figsize=(10, 8), dpi=200)
-        sns.heatmap(pivot_table, annot=True, fmt=".0f", cmap="viridis_r")
-        plt.title("Total Cost Sensitivity: Hybrid Policy")
-        plt.xlabel("Startup Time (min)")
-        plt.ylabel("Violation Cost ($/Byte)")
+    output_path = "sensitivity_heatmap.png"
+    plt.savefig(output_path)
+    print(f"Heatmap saved to {output_path}")
         
-        output_path = "sensitivity_heatmap.png"
-        plt.savefig(output_path)
-        print(f"Heatmap saved to {output_path}")
-        
-    except Exception as e:
-        print(f"Plotting failed: {e}")
 
 if __name__ == "__main__":
     run_sensitivity_analysis()
