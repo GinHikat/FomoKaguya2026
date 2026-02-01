@@ -346,7 +346,7 @@ with tab1:
                     "Reactive": ReactivePolicy(config),
                     "Predictive": PredictivePolicy(config),
                     "Hybrid": HybridPolicy(config),
-                    "Fixed": OptimalFixedPolicy(config, fixed_servers=min_servers)
+                    "Fixed": OptimalFixedPolicy(config, fixed_servers=max_servers)
                 }
                 
                 sim = Simulator(config, cost_model, policies)
@@ -523,7 +523,7 @@ with tab2:
         window_start = st.number_input(
             "Start at minute", 
             min_value=0, 
-            max_value=max(0, len(load_series) - 20),
+            max_value=max(0, len(load_series) - 60),
             value=350,
             step=10,
             help="Starting time for simulation window"
@@ -532,9 +532,9 @@ with tab2:
         window_duration = st.slider(
             "Duration (minutes)",
             min_value=1,
-            max_value=20,
+            max_value=60,
             value=10,
-            help="How many minutes to simulate (1-20 min)"
+            help="How many minutes to simulate (1-60 min)"
         )
     
     start_simulation = st.button("▶️ Start Live Simulation", type="primary", width='stretch')
@@ -672,7 +672,7 @@ with tab2:
 # ==========================================
 with tab3:
     st.markdown("### 🧪 Sensitivity Analysis Lab")
-    st.markdown("Experiment with cost parameters and startup time to understand their impact on the Hybrid Policy performance.")
+    st.markdown("Experiment with cost parameters and startup time to understand their impact on the **DP Optimal** policy performance.")
     
     col1, col2 = st.columns(2)
     with col1:
@@ -697,27 +697,35 @@ with tab3:
     
     if st.button("🔬 Run What-If Analysis", type="primary", width='stretch'):
         try:
-            with st.spinner("⏳ Running what-if scenario..."):
+            with st.spinner("⏳ Running DP optimization with new parameters (may take 30-60 seconds)..."):
                 # Create modified config
                 wi_config = config.copy()
                 wi_config["cost_parameters"] = config["cost_parameters"].copy()
                 wi_config["cost_parameters"]["violation_cost"] = s_violation_cost
                 wi_config["cost_parameters"]["startup_time"] = s_startup_time
                 
-                wi_cost_model = CostModel(wi_config)
-                wi_policy = HybridPolicy(wi_config)
-                wi_sim = Simulator(wi_config, wi_cost_model, {"Hybrid": wi_policy})
+                # Run DP Optimal with new config
+                wi_config_json = json.dumps(wi_config, sort_keys=True)
+                wi_res, wi_error = run_dp_optimization(wi_config_json, load_series)
                 
-                wi_res = wi_sim.run_scenario("Hybrid", load_series, predictions, anomalies=anomalies)
+                if wi_res is None:
+                    st.error(f"⚠️ DP Optimization failed: {wi_error}")
+                    st.stop()
+                
+                wi_cost_model = CostModel(wi_config)
                 wi_metrics = wi_cost_model.calculate_total_cost(wi_res)
                 
-                # Baseline comparison
+                # Baseline comparison - reuse cached DP result
                 if comparison_mode:
-                    baseline_cost_model = CostModel(config)
-                    baseline_policy = HybridPolicy(config)
-                    baseline_sim = Simulator(config, baseline_cost_model, {"Hybrid": baseline_policy})
-                    baseline_res = baseline_sim.run_scenario("Hybrid", load_series, predictions, anomalies=anomalies)
-                    baseline_metrics = baseline_cost_model.calculate_total_cost(baseline_res)
+                    baseline_config_json = json.dumps(config, sort_keys=True)
+                    baseline_res, baseline_error = run_dp_optimization(baseline_config_json, load_series)
+                    
+                    if baseline_res is None:
+                        st.warning("⚠️ Baseline DP failed, skipping comparison")
+                        comparison_mode = False
+                    else:
+                        baseline_cost_model = CostModel(config)
+                        baseline_metrics = baseline_cost_model.calculate_total_cost(baseline_res)
                 
                 st.markdown("#### 📊 Results")
                 

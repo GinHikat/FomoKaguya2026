@@ -171,29 +171,52 @@ def plot_simulation_timeline_plotly(results_dict, load_data, predictions=None, a
             row=2, col=1
         )
     
-    # Enhanced Layout
+    
+    # Enhanced Layout with separate legends for each subplot
     fig.update_layout(
         title={
             'text': "<b>Autoscaling Simulation Timeline</b>",
             'font': {'size': 24, 'family': 'Inter, sans-serif'}
         },
-        height=750,
+        height=800,
         hovermode="x unified",
+        showlegend=True,
         legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=-0.15,
-            xanchor="center",
-            x=0.5,
+            # This will be overridden by trace-specific legend assignments
+            orientation="v",
+            yanchor="top",
+            y=0.98,
+            xanchor="left",
+            x=1.01,
             bgcolor='rgba(255,255,255,0.9)',
             bordercolor='rgba(0,0,0,0.1)',
-            borderwidth=1
+            borderwidth=1,
+            font=dict(size=10)
         ),
         plot_bgcolor='rgba(250,250,250,0.5)',
         paper_bgcolor='white',
         font=dict(family='Inter, sans-serif', size=12),
-        margin=dict(t=80, b=100)
+        margin=dict(t=80, b=120, r=150)  # More space for legend on right
     )
+    
+    # Assign traces to specific legend groups
+    # Row 1 traces (Traffic & Forecast) -> legend 1
+    # Row 2 traces (Servers) -> legend 2
+    
+    # Update all traces to use separate legend groups
+    for trace in fig.data:
+        if 'Traffic' in trace.name or 'Forecast' in trace.name or 'Bound' in trace.name or 'Confidence' in trace.name or 'Anomal' in trace.name:
+            # Traffic/Forecast traces - show in top legend
+            trace.update(
+                legendgroup='traffic',
+                legendgrouptitle_text='<b>Traffic & Forecast</b>'
+            )
+        else:
+            # Server traces - show in separate legend group
+            trace.update(
+                legendgroup='servers',
+                legendgrouptitle_text='<b>Server Allocation</b>'
+            )
     
     # Update axes styling
     fig.update_yaxes(
@@ -212,7 +235,8 @@ def plot_simulation_timeline_plotly(results_dict, load_data, predictions=None, a
         title_text="<b>Time (Minutes)</b>",
         row=2, col=1,
         gridcolor='rgba(200,200,200,0.3)',
-        showgrid=True
+        showgrid=True,
+        title_standoff=10  # More space between axis and label
     )
     
     # Update subplot title styling
