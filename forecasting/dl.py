@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+import math
+import os
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using:", device)
@@ -202,7 +204,11 @@ class DL():
         if self.model_name == 'bilstm_attention':
             model = LSTMSelfAttention(input_size = self.input_dim).to(device)
 
-        state_dict = torch.load(f'artifact/{self.model_name}.pt', map_location=torch.device('cpu'))
+        # Resolve path relative to this file
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        artifact_path = os.path.join(current_dir, 'artifact', f'{self.model_name}.pt')
+        
+        state_dict = torch.load(artifact_path, map_location=torch.device('cpu'))
         model.load_state_dict(state_dict)
 
         return model
@@ -214,7 +220,7 @@ class DL():
         model = model.to(device)
         model.eval()
         with torch.no_grad():
-            X_test_tensor = torch.tensor(X_test, dtype=torch.float32).to(device)
+            X_test_tensor = torch.tensor(X, dtype=torch.float32).to(device)
             y_pred_tensor = model(X_test_tensor).cpu()
 
         y_pred = y_pred_tensor.numpy().ravel()
