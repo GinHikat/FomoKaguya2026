@@ -202,7 +202,7 @@ class DL():
         if self.model_name == 'bilstm_attention':
             model = LSTMSelfAttention(input_size = self.input_dim).to(device)
 
-        state_dict = torch.load(f'artifact/{self.model_name}.pkl', map_location=torch.device('cpu'))
+        state_dict = torch.load(f'artifact/{self.model_name}.pt', map_location=torch.device('cpu'))
         model.load_state_dict(state_dict)
 
         return model
