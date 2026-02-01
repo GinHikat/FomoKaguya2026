@@ -1,5 +1,4 @@
 import yaml
-import numpy as np
 
 class CostModel:
     def __init__(self, config_path="config.yaml"):

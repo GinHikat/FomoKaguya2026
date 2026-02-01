@@ -139,7 +139,6 @@ class DPOptimizer:
         Forward pass to build the optimal trajectory.
         """
         # Initial State
-        # Assume start with min servers? Or given?
         # Let's assume start at min servers, no cooldown, no prev action (0)
         s_current = self.min_servers
         c_current = 0
