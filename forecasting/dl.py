@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+import math
+import os
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using:", device)
@@ -197,12 +199,18 @@ class DL():
         self.input_dim = input_dim
     
     def load_statedict(self):
-        if self.model_name == 'lstm':
+        if self.model_name == 'bilstm':
             model = LSTM(input_size=self.input_dim, output_size=1, dropout=0.5).to(device)
-        if self.model_name == 'bilstm_attention':
+        elif self.model_name == 'bilstm_attention':
             model = LSTMSelfAttention(input_size = self.input_dim).to(device)
+        elif self.model_name == 'transformer':
+            model = Transformer(input_size = self.input_dim)
 
-        state_dict = torch.load(f'artifact/{self.model_name}.pt', map_location=torch.device('cpu'))
+        # Resolve path relative to this file
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        artifact_path = os.path.join(current_dir, 'artifact', f'{self.model_name}.pt')
+        
+        state_dict = torch.load(artifact_path, map_location=torch.device('cpu'))
         model.load_state_dict(state_dict)
 
         return model

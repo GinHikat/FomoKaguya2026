@@ -16,10 +16,10 @@ from rvfl import *
 from ml import *
 
 class Predictor():
-    def __init__(self, model_name, interval, window_size):
+    def __init__(self, model_name, interval):
         self.model_name = model_name
         self.interval = interval
-        self.window_size = window_size
+        self.window_size = 12
 
     def agg_df(self, df): 
 
@@ -226,7 +226,6 @@ class Predictor():
             - de-rvfl
 
         3. dl-base
-            - lstm (x2)
             - bilstm (x2)
             - transformer 
             - bilstm_attention
