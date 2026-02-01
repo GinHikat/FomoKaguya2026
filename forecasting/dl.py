@@ -7,6 +7,7 @@ import torch.nn.functional as F
 import math
 import os
 
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using:", device)
 
@@ -199,10 +200,12 @@ class DL():
         self.input_dim = input_dim
     
     def load_statedict(self):
-        if self.model_name == 'lstm':
+        if self.model_name == 'bilstm':
             model = LSTM(input_size=self.input_dim, output_size=1, dropout=0.5).to(device)
-        if self.model_name == 'bilstm_attention':
+        elif self.model_name == 'bilstm_attention':
             model = LSTMSelfAttention(input_size = self.input_dim).to(device)
+        elif self.model_name == 'transformer':
+            model = Transformer(input_size = self.input_dim)
 
         # Resolve path relative to this file
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -220,7 +223,7 @@ class DL():
         model = model.to(device)
         model.eval()
         with torch.no_grad():
-            X_test_tensor = torch.tensor(X, dtype=torch.float32).to(device)
+            X_test_tensor = torch.tensor(X_test, dtype=torch.float32).to(device)
             y_pred_tensor = model(X_test_tensor).cpu()
 
         y_pred = y_pred_tensor.numpy().ravel()

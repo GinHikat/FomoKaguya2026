@@ -16,10 +16,10 @@ from rvfl import *
 from ml import *
 
 class Predictor():
-    def __init__(self, model_name, interval, window_size):
+    def __init__(self, model_name, interval):
         self.model_name = model_name
         self.interval = interval
-        self.window_size = window_size
+        self.window_size = 12
 
     def agg_df(self, df): 
 
@@ -178,7 +178,7 @@ class Predictor():
 
     def rvfl_input(self, df):
         '''
-        Process from original df to 2-dim array to match with the model (will be changed later to fit with further models)
+        Process from original df to 2-dim array to match with the model 
 
         Input:
             df: original df (from read_csv)
@@ -196,7 +196,14 @@ class Predictor():
 
     def dl_input(self, df):
         '''
-        
+        Process from original df to 3-dim tensor to match with RNN model
+
+        Input:
+            df: original df (from read_csv)
+
+        Output:
+            X: tensor(batch_size, window_size, num_feature)
+            y: tensor(batch_size,)
         '''
         X, y = self.moving_window(df)
 
@@ -219,7 +226,6 @@ class Predictor():
             - de-rvfl
 
         3. dl-base
-            - lstm (x2)
             - bilstm (x2)
             - transformer 
             - bilstm_attention
@@ -243,10 +249,15 @@ class Predictor():
 
         X, y = input_fn(df)
 
-        dl = DL(model_name = self.model_name, input_dim = X.shape[-1])
-
-        y_pred = dl.predict(X)
-
+        if model == 'dl':
+            model = DL(model_name = self.model_name, input_dim = X.shape[-1])
+        elif model == 'rvfl':
+            model = rvfl(model_name = self.model_name)
+        elif model == 'ml':
+            model = ML(model_name = self.model_name)
+        
+        y_pred = model.predict(X)
+        
         return X,y,y_pred
 
         
