@@ -1,6 +1,6 @@
 import numpy as np
 from tqdm import tqdm
-import math
+import itertools
 
 class DPOptimizer:
     def __init__(self, config, cost_model, load_data):
@@ -16,118 +16,194 @@ class DPOptimizer:
         self.boot_time = config["cost_parameters"]["startup_time"]
         self.capacity = config["cost_parameters"]["capacity_per_server"]
         
-        # State dimensions
-        self.S = self.max_servers - self.min_servers + 1 # Server states indices (0 to S-1, mapping to min..max)
-        self.C = self.cooldown + 1 # Cooldown states 0..cooldown (e.g. 0 to 5)
-        self.P = 3 # Previous action: 0: -1(in), 1: 0(no-op), 2: +1(out)
+        # --- State Space Definition ---
+        # State: (ActiveServers, Pending_1, ..., Pending_K) where K = boot_time
+        # P_i: Servers becoming active in i minutes
+        # Queue length required: boot_time - 1
+        # Example: boot_time=3. Queue=[P1, P2]. P1 active next step. P2 active in 2 steps.
+        # Action determines what enters P_last.
         
-        # Mapping helpers
+        self.queue_len = max(0, self.boot_time - 1)
+        
+        print(f"Generating DP State Space (Queue Len={self.queue_len})...")
+        
+        # Generate valid states: Tuple (active, p1, p2...)
+        # Constraint: active + sum(queue) <= max_servers
+        # Optimization: We iterate total N from min to max, and partition N into slots.
+        
+        valid_states = []
+        
+        # Iterate total number of servers provisioned
+        for n in range(self.min_servers, self.max_servers + 1):
+            # Partition n into (Active, P1...PK)
+            # number of slots = 1 + queue_len
+            num_slots = 1 + self.queue_len
+            
+            # Use itertools to generate partitions
+            # Approach: partitions of N into K bins.
+            # Stars and Bars equivalent or just simple product since N is small (10).
+            # Max servers=10, Slots=3. 
+            # We can just iterate all tuples of length `num_slots` where sum is in range [min, max]
+            # Actually range(0, max+1) for each slot, check sum.
+            pass
+            
+        # Brute force generator for small state space
+        # Max servers is small (typically < 20 for this demo)
+        ranges = [range(self.max_servers + 1) for _ in range(1 + self.queue_len)]
+        for p in itertools.product(*ranges):
+            if self.min_servers <= sum(p) <= self.max_servers:
+                valid_states.append(p)
+                
+        self.states = sorted(list(set(valid_states)))
+        self.state_to_idx = {s: i for i, s in enumerate(self.states)}
+        self.S = len(self.states)
+        print(f"DP State Space Size: {self.S}")
+        
+        self.C = self.cooldown + 1 
+        self.P = 3 
+        
         self.action_space = [-1, 0, 1]
         
-    def server_to_idx(self, s):
-        return s - self.min_servers
+        # Precompute Transitions
+        self.transitions = np.full((self.S, len(self.action_space)), -1, dtype=int)
         
-    def idx_to_server(self, idx):
-        return idx + self.min_servers
-        
+        print("Precomputing Transitions...")
+        for i, s in enumerate(self.states):
+            current_A = s[0]
+            queue = list(s[1:])
+            total = sum(s)
+            
+            for a_idx, action in enumerate(self.action_space):
+                # 1. Bounds Check
+                if total + action < self.min_servers or total + action > self.max_servers:
+                    continue 
+
+                # 2. Determine Next State (s')
+                # Logic:
+                # - Action modifies the "pipeline" input or removes from pipeline
+                # - Time evolution shifts pipeline
+                
+                # Step A: Apply Action (Scaling)
+                # This gives us the "Target Pipeline" before time shift
+                
+                temp_A = current_A
+                temp_queue = queue.copy() # [p1, p2]
+                
+                newly_launched = 0 # Will enter at end of queue
+                
+                if action == 1:
+                    newly_launched = 1
+                elif action == -1:
+                    # Remove 1 server. Prioritize removing from latest additions.
+                    # Order of removal: newly_launched (implicit) -> queue end -> ... -> queue start -> active
+                    
+                    # Since we chose action=-1, we simply don't have "newly_launched" (it's 0)
+                    # We start removing from existing queue
+                    rem = 1
+                    
+                    # Check queue from end
+                    for q_i in range(len(temp_queue)-1, -1, -1):
+                        if rem == 0: break
+                        if temp_queue[q_i] > 0:
+                            temp_queue[q_i] -= 1
+                            rem = 0
+                            
+                    # If still need remove, remove from Active
+                    if rem > 0:
+                        if temp_A > 0:
+                            temp_A -= 1
+                            
+                # Step B: Time Evolution (Shift)
+                # Next Active = temp_A + temp_queue[0]
+                # Next Queue[i] = temp_queue[i+1]
+                # Next Queue[last] = newly_launched
+                
+                next_A = temp_A
+                if len(temp_queue) > 0:
+                    next_A += temp_queue[0]
+                    
+                next_queue_list = []
+                if len(temp_queue) > 1:
+                    next_queue_list = temp_queue[1:]
+                
+                if self.boot_time > 1:
+                    next_queue_list.append(newly_launched)
+                else:
+                    # If boot time is 1, newly launched lands explicitly in Active next step
+                    next_A += newly_launched
+                    
+                next_state_tuple = tuple([next_A] + next_queue_list)
+                
+                if next_state_tuple in self.state_to_idx:
+                    self.transitions[i, a_idx] = self.state_to_idx[next_state_tuple]
+                else:
+                    # Should correspond to a valid state if logic is correct
+                    pass
+
     def prev_action_to_idx(self, p):
-        # -1 -> 0, 0 -> 1, 1 -> 2
         return p + 1
         
     def idx_to_prev_action(self, idx):
         return idx - 1
 
     def optimize(self):
-        """
-        Run the DP algorithm (Backward Induction).
-        V[t][s_idx][c][p_idx] = min total cost from t to T
-        """
-        # Initialize V table with infinity
-        # Dimensions: T+1, S, C, P
-        # Initialize V table with infinity
-        # Dimensions: T+1, S, C, P
-        
         V = np.full((self.T + 1, self.S, self.C, self.P), np.inf)
-        # Policy table to store best action index
-        # actions lie in 0..2 (indices)
         Policy = np.full((self.T, self.S, self.C, self.P), 0, dtype=int)
         
-        # Terminal condition: 0 cost at T
         V[self.T, :, :, :] = 0
         
-        # Backward Induction
-        # Note on Lookahead for Boot Time:
-        # We calculate violation cost against load[t + boot_time] to enforce proactive scaling.
-        
         for t in tqdm(range(self.T - 1, -1, -1), desc="DP Optimization"):
-            # Lookahead load for violation calculation
-            t_lookahead = min(t + self.boot_time, self.T - 1)
-            load_target = self.load_data[t_lookahead] 
+            load = self.load_data[t]
             
             for s_idx in range(self.S):
-                s = self.idx_to_server(s_idx)
+                state_tuple = self.states[s_idx]
+                
+                active_s = state_tuple[0]
+                total_provisioned = sum(state_tuple)
+                
+                # Cost Calculation
+                # Violation depends on ACTIVE servers
+                drop = max(0, load - active_s * self.capacity)
+                viol_cost = drop * self.config["cost_parameters"]["violation_cost"]
+                
+                # Server cost depends on PROVISIONED servers
+                serv_cost = total_provisioned * self.config["cost_parameters"]["server_cost"]
                 
                 for c in range(self.C):
                     for p_idx in range(self.P):
                         prev_action = self.idx_to_prev_action(p_idx)
                         
                         best_cost = np.inf
-                        best_a_idx = 1 # default 0 NO_OP
+                        best_a_idx = 1
                         
-                        # Try all actions
                         for a_idx, action in enumerate(self.action_space):
-                            # Feasibility Checks
-                            
-                            # 1. Bounds
-                            s_next = s + action
-                            if s_next < self.min_servers or s_next > self.max_servers:
-                                continue
-                            
-                            # 2. Cooldown
-                            # If cooldown active (c > 0), only action 0 is allowed
-                            if c > 0 and action != 0:
+                            # Transition Check
+                            s_next_idx = self.transitions[s_idx, a_idx]
+                            if s_next_idx == -1: 
                                 continue
                                 
-                            # 3. Hysteresis
-                            # If prev_action was +1, do NOT allow -1
-                            if prev_action == 1 and action == -1:
-                                continue
+                            # Constraints
+                            if c > 0 and action != 0: continue
+                            if prev_action == 1 and action == -1: continue
                             
-                            # Calculate Immediate Cost
-                            # Server Cost + Scale Cost
-                            # Using s_t for violations:
-                            active_s = s
-                            
-                            # Cost Data
-                            # We construct a synthetic cost for DP objective
-                            drop = max(0, load_target - active_s * self.capacity)
-                            viol_cost = drop * self.config["cost_parameters"]["violation_cost"]
-                            serv_cost = active_s * self.config["cost_parameters"]["server_cost"]
                             scal_cost = abs(action) * self.config["cost_parameters"]["scale_cost"]
-                            
                             immediate_cost = serv_cost + scal_cost + viol_cost
                             
-                            # Next State
-                            s_next_idx = self.server_to_idx(s_next)
-                            
-                            # Cooldown update
-                            # If action != 0, reset cooldown to max
-                            # If action == 0, decrement c (if c > 0) or c=0
+                            # Next Cooldown
                             if action != 0:
                                 c_next = self.config["simulation"]["cooldown_minutes"]
                             else:
                                 c_next = max(0, c - 1)
-                                
-                            # Previous Action update
                             p_next_idx = self.prev_action_to_idx(action)
                             
-                            future_cost = V[t+1, s_next_idx, c_next, p_next_idx]
-                            total_cost = immediate_cost + future_cost
-                            
-                            if total_cost < best_cost:
-                                best_cost = total_cost
-                                best_a_idx = a_idx
-                        
+                            if t < self.T: # Boundary check not needed given loop range, but good practice
+                                future_cost = V[t+1, s_next_idx, c_next, p_next_idx]
+                                total_cost = immediate_cost + future_cost
+                                
+                                if total_cost < best_cost:
+                                    best_cost = total_cost
+                                    best_a_idx = a_idx
+                                
                         V[t, s_idx, c, p_idx] = best_cost
                         Policy[t, s_idx, c, p_idx] = best_a_idx
                         
@@ -135,35 +211,38 @@ class DPOptimizer:
         self.Policy = Policy
         
     def reconstruct_path(self):
-        """
-        Forward pass to build the optimal trajectory.
-        """
-        # Initial State
-        # Let's assume start at min servers, no cooldown, no prev action (0)
-        s_current = self.min_servers
+        # Start: Min servers active, empty queue
+        start_queue = [0] * self.queue_len
+        start_tuple = tuple([self.min_servers] + start_queue)
+        
+        if start_tuple not in self.state_to_idx:
+             # Fallback
+             start_tuple = self.states[0]
+             
+        s_idx = self.state_to_idx[start_tuple]
         c_current = 0
         p_current_idx = self.prev_action_to_idx(0)
         
         timeline = []
         
         for t in range(self.T):
-            s_idx = self.server_to_idx(s_current)
+            if s_idx == -1: break
             
-            # Look up best action
-            # Note: Policy stores indices into action_space
             a_idx = self.Policy[t, s_idx, c_current, p_current_idx]
             action = self.action_space[a_idx]
             
-            # Record
+            s_tuple = self.states[s_idx]
+            
             timeline.append({
                 "time_step": t,
-                "servers": s_current,
+                "servers": sum(s_tuple), 
+                "servers_active": s_tuple[0],
                 "action": action,
                 "load": self.load_data[t]
             })
             
-            # Update state
-            s_current += action
+            s_idx = self.transitions[s_idx, a_idx]
+            
             if action != 0:
                 c_current = self.config["simulation"]["cooldown_minutes"]
             else:
@@ -173,5 +252,4 @@ class DPOptimizer:
         return timeline
 
 def transform_data_gap(data):
-    # Ensure data is clean (fill nans or handle 0s if they are gaps)
     return np.nan_to_num(data, nan=0.0)
