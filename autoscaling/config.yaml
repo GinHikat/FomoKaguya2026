@@ -22,7 +22,7 @@ thresholds:
 simulation:
   cooldown_minutes: 5
   min_servers: 1
-  max_servers: 10
+  max_servers: 5
   interval: "1min"              # Simulation step size
 
 forecasting:
