@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+from pathlib import Path
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using:", device)
@@ -202,7 +203,11 @@ class DL():
         if self.model_name == 'bilstm_attention':
             model = LSTMSelfAttention(input_size = self.input_dim).to(device)
 
-        state_dict = torch.load(f'artifact/{self.model_name}.pt', map_location=torch.device('cpu'))
+
+        base_dir = Path(__file__).resolve().parent
+        artifact_dir = base_dir / "artifact"
+
+        state_dict = torch.load(artifact_dir/f'{self.model_name}.pt', map_location=torch.device('cpu'))
         model.load_state_dict(state_dict)
 
         return model

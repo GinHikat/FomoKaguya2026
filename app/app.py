@@ -1,39 +1,38 @@
 import streamlit as st
-import pickle
 import sys
 import matplotlib.pyplot as plt 
-from forecasting.get_forecasting_model import Predictor, DeepRVFL
 import pandas as pd 
-import numpy as np 
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from forecasting.get_forecasting_model import Predictor
+from forecasting.rvfl import DeepRVFL
+sys.modules['__main__'].DeepRVFL = DeepRVFL
+
+processed_test= "data/processed/test.csv"
 
 # model selector sẽ có 1 hàm riêng 
 # Expect that you run app.py in main dir
-sys.modules['__main__'].DeepRVFL = DeepRVFL
 
 st.title("Forecasting")
 
-model_path= "forecasting/artifact/de-rvfl.pkl"
-processed_test= "data/processed/test.csv"
-
-def load_info(model_path, data_path, model_name, interval, window_size):
+def load_info(data_path, model_name, interval, window_size):
     info= {}
-    # load model
-    with open(model_path, 'rb') as f:
-        model = pickle.load(f)
-
-    info["model"]=model
     df= pd.read_csv(data_path)
     predictor= Predictor(model_name, interval, window_size)
-    X,y= predictor.process_input(df)
+    X, y_true, y_pred = predictor.get_prediction(df)
     info["X"]= X
-    info["y"]= y
+    info["y_true"]= y_true
+    info["y_pred"]= y_pred
     return info
 
-def predict_visualize(model, X, y):
-    y_pred = model.predict(X)
-    y_pred = np.exp(y_pred)
-    y_true = np.exp(y)
-    t = range(len(y))
+def predict_visualize(info):
+    y_true = info["y_true"]
+    y_pred= info["y_pred"]
+    
+    t = range(len(y_true))
     # figure
 
     fig, ax = plt.subplots(figsize=(12, 4))
@@ -48,8 +47,9 @@ def predict_visualize(model, X, y):
     fig.tight_layout()
     return fig
 
-info= load_info(model_path, processed_test, "de-rvfl", '5min', 12)
-fig= predict_visualize(info["model"], info["X"], info["y"])
-
-st.pyplot(fig)
+model_name= st.selectbox("Select the model", ("bilstm_attention", "de-rvfl"))
+if st.button("Submit"):
+    info= load_info(processed_test, model_name, '5min', 12)
+    fig= predict_visualize(info)
+    st.pyplot(fig)
 
