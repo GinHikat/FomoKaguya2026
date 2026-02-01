@@ -41,7 +41,7 @@ def generate_synthetic_data(length=1000):
     load[gap_start:gap_end] = 0
     
     return load
-
+    
 def main():
     # Load config
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -90,6 +90,22 @@ def main():
     # Simulator
     sim = Simulator(config, cost_model, policies)
     
+    # Anomaly Detection
+    # Load Pre-trained model
+    from autoscaling.bonus.anomaly_detector import AnomalyDetector
+    print("Loading Anomaly Detector...")
+    detector = AnomalyDetector(contamination=0.05) 
+    
+    # Path to saved model in bonus directory
+    bonus_dir = os.path.join(script_dir, "bonus")
+    model_path = os.path.join(bonus_dir, "anomaly_model.joblib")
+    
+    if os.path.exists(model_path):
+        detector.load(model_path)
+    else:
+        print(f"Warning: Model not found at {model_path}. Fitting on test data (fallback).")
+        detector.fit(load_data_series)
+    
     # Run Comparisons
     results = {}
     
@@ -104,13 +120,39 @@ def main():
         predictions = load_data_series
     else:
         print(f"Using Real Forecast Model: {config.get('forecasting', {}).get('model', 'Unknown')}")
-        predictions = forecasts
-        if len(predictions) != len(load_data_series):
-             print(f"Warning: Forecast length {len(predictions)} != Data length {len(load_data_series)}. Truncating/Padding.")
+        
+        # Compute Prediction Intervals (Empirical Residuals on current batch)
+        # Note: Ideally residuals are computed on validation set.
+        residuals = actuals_aligned - forecasts
+        std_resid = np.std(residuals)
+        
+        # 95% Confidence Interval
+        z_score = 1.96
+        upper_bound = forecasts + z_score * std_resid
+        lower_bound = np.maximum(forecasts - z_score * std_resid, 0)
+        
+        print(f"Forecast Stats: Mean Residual={np.mean(residuals):.2f}, Std={std_resid:.2f}")
+        
+        predictions = {
+            "mean": forecasts,
+            "upper": upper_bound,
+            "lower": lower_bound
+        }
+        
+        # Check alignment with simulation data
+        if len(forecasts) != len(load_data_series):
+             print(f"Warning: Forecast length {len(forecasts)} != Data length {len(load_data_series)}. Truncating/Padding.")
+    
+    # Batch detect anomalies
+    anomalies = detector.detect_batch(load_data_series)
     
     for name in policies:
         print(f"Running {name}...")
-        results[name] = sim.run_scenario(name, load_data_series, predictions)
+        if name == "DP_Optimal":
+            pass
+            
+        # Pass pre-computed anomalies
+        results[name] = sim.run_scenario(name, load_data_series, predictions, anomalies=anomalies)
         
     # Analysis
     print("\n--- Summary Results ---")

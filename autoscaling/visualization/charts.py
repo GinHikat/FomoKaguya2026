@@ -3,8 +3,9 @@ import seaborn as sns
 import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
+import numpy as np
 
-def plot_simulation_timeline_plotly(results_dict, load_data, predictions=None):
+def plot_simulation_timeline_plotly(results_dict, load_data, predictions=None, anomalies=None):
     """
     Interactive Plotly version of simulation timeline.
     Splits Load/Forecast and Server Counts into two synchronized subplots.
@@ -25,11 +26,57 @@ def plot_simulation_timeline_plotly(results_dict, load_data, predictions=None):
     
     # 2. Plot Predictions (Row 1)
     if predictions is not None:
-        fig.add_trace(
-            go.Scatter(y=predictions, name="Forecast", 
-                       line=dict(color='blue', width=1.5, dash='dash')),
-            row=1, col=1
-        )
+        if isinstance(predictions, dict):
+            # PI Mode
+            mean_pred = predictions.get("mean", [])
+            upper = predictions.get("upper", [])
+            lower = predictions.get("lower", [])
+            
+            # Plot Bounds (Shaded Area)
+            fig.add_trace(
+                go.Scatter(
+                    x=list(range(len(upper))) + list(range(len(lower)))[::-1],
+                    y=list(upper) + list(lower)[::-1],
+                    fill='toself',
+                    fillcolor='rgba(0,0,255,0.1)',
+                    line=dict(color='rgba(255,255,255,0)'),
+                    name='95% Confidence Interval',
+                    showlegend=True
+                ),
+                row=1, col=1
+            )
+            # Plot Mean
+            fig.add_trace(
+                go.Scatter(y=mean_pred, name="Forecast (Mean)", 
+                           line=dict(color='blue', width=1.5, dash='dash')),
+                row=1, col=1
+            )
+        else:
+            # Simple Array Mode
+            fig.add_trace(
+                go.Scatter(y=predictions, name="Forecast", 
+                           line=dict(color='blue', width=1.5, dash='dash')),
+                row=1, col=1
+            )
+            
+    # 2.5 Plot Anomalies (Row 1)
+    if anomalies is not None:
+        # anomalies is boolean array. Get indices.
+        anomaly_indices = np.where(anomalies)[0]
+        if len(anomaly_indices) > 0:
+            anomaly_vals = load_data[anomaly_indices]
+            
+            fig.add_trace(
+                go.Scatter(
+                    x=anomaly_indices,
+                    y=anomaly_vals,
+                    mode='markers',
+                    name='Anomalies (Spike/DDoS)',
+                    marker=dict(color='red', size=8, symbol='x'),
+                    showlegend=True
+                ),
+                row=1, col=1
+            )
 
     # 3. Plot Servers (Row 2)
     colors = px.colors.qualitative.Plotly

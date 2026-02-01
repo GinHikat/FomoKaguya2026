@@ -7,7 +7,7 @@ class Simulator:
         self.policies = policies # Dictionary of policy_name -> PolicyObject
         self.boot_time = config["cost_parameters"]["startup_time"]
         
-    def run_scenario(self, policy_name, load_data, predictions=None):
+    def run_scenario(self, policy_name, load_data, predictions=None, anomalies=None):
         """
         Run simulation for a specific policy.
         """
@@ -39,18 +39,37 @@ class Simulator:
             
             total_provisioned = ready_servers + len(booting_servers)
             
+            total_provisioned = ready_servers + len(booting_servers)
+            
+            # Detect Anomaly
+            is_anomaly = False
+            if anomalies is not None:
+                is_anomaly = anomalies[t]
+            
             # 2. Get Decision
             # Policy applies to PROVISIONED servers.
             
-            pred = predictions[t] if predictions is not None else None
+            prediction = None
+            if predictions is not None:
+                if isinstance(predictions, dict):
+                    prediction = {}
+                    for key, val_array in predictions.items():
+                        # Extract value at t if available, else 0 or last
+                        if t < len(val_array):
+                            prediction[key] = val_array[t]
+                        else:
+                            prediction[key] = 0 # Fallback
+                elif t < len(predictions):
+                    prediction = predictions[t]
             
             decision = policy.decide(
                 current_step=t,
-                current_servers=total_provisioned,
+                current_servers=total_provisioned, # Policy sees total provisioned
                 current_load=load,
-                predicted_load=pred,
+                predicted_load=prediction,
                 cooldown_counter=cooldown_counter,
-                last_action_type=last_action_type
+                last_action_type=last_action_type,
+                is_anomaly=is_anomaly # Pass anomaly flag
             )
             
             action = decision["action"]
