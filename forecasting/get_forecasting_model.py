@@ -1,94 +1,19 @@
 import pandas as pd 
 import numpy as np
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+import os, sys
+import pickle
 
-# don't care about these 2 yet
-class DeepRVFL:
-    def __init__(
-        self,
-        input_dim,
-        hidden_dims=(100, 100),
-        activation=np.tanh,
-        reg=1e-3,
-        seed=42
-    ):
-        rng = np.random.default_rng(seed)
+project_root = os.path.abspath(os.path.join(os.getcwd(), ".."))
+if project_root not in sys.path:
+    sys.path.append(project_root)
 
-        self.activation = activation
-        self.reg = reg
-        self.hidden_dims = hidden_dims
-
-        self.W = []
-        self.b = []
-
-        prev_dim = input_dim
-        for hdim in hidden_dims:
-            self.W.append(rng.normal(0, 1, (prev_dim, hdim)))
-            self.b.append(rng.normal(0, 1, hdim))
-            prev_dim = hdim
-
-    def _forward_hidden(self, X):
-        H_list = []
-        H = X
-        for W, b in zip(self.W, self.b):
-            H = self.activation(H @ W + b)
-            H_list.append(H)
-        return H_list
-
-    def fit(self, X, y):
-        H_list = self._forward_hidden(X)
-
-        Z = np.hstack([X] + H_list)
-
-        I = np.eye(Z.shape[1])
-        self.beta = np.linalg.solve(
-            Z.T @ Z + self.reg * I,
-            Z.T @ y
-        )
-
-    def predict(self, X):
-        H_list = self._forward_hidden(X)
-        Z = np.hstack([X] + H_list)
-        return Z @ self.beta
-
-class DeepEnsembleRVFL:
-    def __init__(
-        self,
-        input_dim,
-        hidden_dims=(100, 100),
-        n_estimators=10,
-        activation=np.tanh,
-        reg=1e-3,
-        seed=42
-    ):
-        self.models = []
-        for i in range(n_estimators):
-            self.models.append(
-                DeepRVFL(
-                    input_dim=input_dim,
-                    hidden_dims=hidden_dims,
-                    activation=activation,
-                    reg=reg,
-                    seed=seed + i
-                )
-            )
-
-    def fit(self, X, y):
-        for model in self.models:
-            model.fit(X, y)
-
-    def predict(self, X):
-        preds = np.column_stack([
-            model.predict(X) for model in self.models
-        ])
-        return preds.mean(axis=1)
-
-    def predict_interval(self, X, alpha=0.05):
-        preds = np.column_stack([
-            model.predict(X) for model in self.models
-        ])
-        lower = np.quantile(preds, alpha / 2, axis=1)
-        upper = np.quantile(preds, 1 - alpha / 2, axis=1)
-        return lower, upper
+from dl import *
+from rvfl import *
+from ml import *
 
 class Predictor():
     def __init__(self, model_name, interval, window_size):
@@ -154,7 +79,7 @@ class Predictor():
 
         return df_agg
 
-    def for_dl_input(self, 
+    def moving_window(self, 
         df,
         target_col = 'log_time'):
         """
@@ -195,9 +120,63 @@ class Predictor():
         X = np.array(X)  # (batch_size, window_size, num_features)
         y = np.array(y)  # (batch_size,)
 
-        return np.array(X), y
+        return X, y
 
-    def process_input(self, df):
+    # Process data for Input of each type
+
+    def ml_input(self, df, target = 'log_time'):
+        '''
+        Return df input for ML models
+
+        Input: 
+            df: original df (from read_csv)
+            target: target col (default is "log_time")
+        Output:
+            X: df
+            y: df
+        '''
+        df_agg = self.agg_df(df)
+
+        lags = [1,2,3]
+        windows = [4,12,30]
+
+        for l in lags:
+            df_agg[f'{target}_lag_{l}'] = df_agg[target].shift(l)
+
+        for w in windows:
+            df_agg[f'{target}_roll_mean_{w}'] = df_agg[target].shift(1).rolling(w).mean()
+            df_agg[f'{target}_roll_std_{w}'] = df_agg[target].shift(1).rolling(w).std()
+
+        df_agg["hour"] = df_agg['time'].dt.hour
+        df_agg["minute"] = df_agg['time'].dt.minute
+        df_agg["second"] = df_agg['time'].dt.second
+        
+        # Cyclical encoding
+        df_agg["hour_sin"] = np.sin(2 * np.pi * df_agg["hour"] / 24)
+        df_agg["hour_cos"] = np.cos(2 * np.pi * df_agg["hour"] / 24)
+        
+        df_agg["minute_sin"] = np.sin(2 * np.pi * df_agg["minute"] / 60)
+        df_agg["minute_cos"] = np.cos(2 * np.pi * df_agg["minute"] / 60)
+        
+        df_agg["second_sin"] = np.sin(2 * np.pi * df_agg["second"] / 60)
+        df_agg["second_cos"] = np.cos(2 * np.pi * df_agg["second"] / 60)
+
+        df_agg.index = df_agg['time']
+        
+        df_agg['dayofweek'] = df_agg.index.dayofweek
+        df_agg['weekofyear'] = df_agg.index.isocalendar().week.astype(int)
+        df_agg['month'] = df_agg.index.month
+        df_agg['is_weekend'] = (df_agg['dayofweek'] >= 5).astype(int)
+        
+        df_agg = df_agg.dropna()
+        
+        y = df_agg[[target]]
+        
+        X = df_agg.drop(['time', 'size', 'log_time'], axis = 1)
+
+        return X, y
+
+    def rvfl_input(self, df):
         '''
         Process from original df to 2-dim array to match with the model (will be changed later to fit with further models)
 
@@ -209,8 +188,68 @@ class Predictor():
             y: (batch_size,)
         '''   
         
-        X, y = self.for_dl_input(df, window_size=self.window_size)
+        X, y = self.moving_window(df)
 
         X = np.asarray(X).reshape(X.shape[0], -1)
 
         return X,y
+
+    def dl_input(self, df):
+        '''
+        
+        '''
+        X, y = self.moving_window(df)
+
+        X_tensor = torch.tensor(X, dtype=torch.float32)
+        y_tensor = torch.tensor(y, dtype=torch.float32).reshape(-1, 1)
+
+        return X, y
+
+    def get_prediction(self, df):
+        '''
+        List of available models:
+
+        1. ml-base
+            - xgboost
+            - lgbm
+
+        2. rvfl-base
+            - rvfl
+            - d-rvfl
+            - de-rvfl
+
+        3. dl-base
+            - lstm (x2)
+            - bilstm (x2)
+            - transformer 
+            - bilstm_attention
+        '''
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print("Using:", device)
+
+        model_type = {
+            'ml': ['xgboost', 'lgbm'],
+            'rvfl': ['rvfl', 'd-rvfl', 'de-rvfl'],
+            'dl': ['lstm', 'bilstm', 'transformer', 'bilstm_attention']
+        }
+
+        for key, value in model_type.items():
+            if self.model_name in value:
+                model = key
+                break
+        
+        # get processing function based on model type
+        input_fn = getattr(self, f"{model}_input")
+
+        X, y = input_fn(df)
+
+        dl = DL(model_name = self.model_name, input_dim = X.shape[-1])
+
+        y_pred = dl.predict(X)
+
+        return X,y,y_pred
+
+        
+
+
+

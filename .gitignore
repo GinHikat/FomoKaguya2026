@@ -1,7 +1,6 @@
 .env
 
 *.csv
-*.txt
 
 /secret
 
@@ -9,3 +8,5 @@
 *.cache*
 
 data/
+
+__pycache__/
