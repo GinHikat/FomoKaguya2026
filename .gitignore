@@ -10,3 +10,6 @@
 data/
 
 __pycache__/
+
+Autoscaling_Analysis.pdf
+autoscaling/plan.md
