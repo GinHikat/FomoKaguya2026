@@ -214,8 +214,8 @@ class DL():
         model = model.to(device)
         model.eval()
         with torch.no_grad():
-            X_test_tensor = torch.tensor(X_test, dtype=torch.float32).to(device)
-            y_pred_tensor = model(X_test_tensor).cpu()
+            X_tensor = torch.tensor(X, dtype=torch.float32).to(device)
+            y_pred_tensor = model(X_tensor).cpu()
 
         y_pred = y_pred_tensor.numpy().ravel()
 
