@@ -14,6 +14,7 @@ if project_root not in sys.path:
 from forecasting.dl import *
 from forecasting.rvfl import *
 from forecasting.ml import *
+from forecasting.arima import *
 
 class Predictor():
     def __init__(self, model_name, interval):
@@ -212,6 +213,20 @@ class Predictor():
 
         return X, y
 
+    def arima_input(self, df, target = 'size'):
+        '''
+        Return df input for ARIMA forecast
+
+        Input: 
+            df: original df (from read_csv)
+            target: target col (default is "size") ARIMA treats the target differently so no logging here
+        Output:
+            agged data
+        '''
+        df_agg = self.agg_df(df)
+
+        return df_agg, df_agg['size'].values
+        
     def get_prediction(self, df):
         '''
         List of available models:
@@ -229,6 +244,9 @@ class Predictor():
             - bilstm (x2)
             - transformer 
             - bilstm_attention
+
+        4. arima-base
+            - sarima (15')
         '''
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print("Using:", device)
@@ -236,7 +254,8 @@ class Predictor():
         model_type = {
             'ml': ['xgboost', 'lgbm'],
             'rvfl': ['rvfl', 'd-rvfl', 'de-rvfl'],
-            'dl': ['lstm', 'bilstm', 'transformer', 'bilstm_attention']
+            'dl': ['lstm', 'bilstm', 'transformer', 'bilstm_attention'],
+            'arima': ['sarimax']
         }
 
         for key, value in model_type.items():
@@ -255,7 +274,9 @@ class Predictor():
             model = rvfl(model_name = self.model_name)
         elif model_ == 'ml':
             model = ML(model_name = self.model_name)
-        
+        elif model_ == 'arima':
+            model = ARIMAS(model_name = self.model_name, output_size = len(y))
+
         y_pred = model.predict(X)
         
         return X,y,y_pred
