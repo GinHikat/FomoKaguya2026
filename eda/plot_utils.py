@@ -1,0 +1,626 @@
+import pandas as pd
+
+
+def print_macro_overview(df):
+    """
+    Prints a text-based Executive Summary of the entire dataset.
+    """
+    import pandas as pd
+    
+    # Basic Time
+    start = df.index.min()
+    end = df.index.max()
+    duration = end - start
+    
+    # Volume
+    total_hits = len(df)
+    total_bytes = df['size'].sum()
+    total_gb = total_bytes / (1024**3)
+    
+    # Users
+    if 'ip' in df.columns:
+        unique_ips = df['ip'].nunique()
+        avg_requests_per_user = total_hits / unique_ips
+    else:
+        unique_ips = 0
+        avg_requests_per_user = 0
+        
+    # Reliability
+    if 'status_label' in df.columns:
+        errors = df[df['status_label'] != 'Success']
+    else:
+        errors = df[df['status'] >= 400]
+        
+    error_count = len(errors)
+    error_rate = (error_count / total_hits) * 100
+    
+    print("="*50)
+    print("           MACRO DATASET OVERVIEW           ")
+    print("="*50)
+    print(f"Time Range     : {start} to {end}")
+    print(f"Duration       : {duration.days} Days")
+    print("-" * 50)
+    print(f"Total Requests : {total_hits:,.0f}")
+    print(f"Avg Daily Hits : {total_hits/duration.days:,.0f}")
+    print("-" * 50)
+    print(f"Total Traffic  : {total_gb:.2f} GB")
+    print(f"Avg Daily MB   : {(total_gb*1024)/duration.days:.2f} MB")
+    print("-" * 50)
+    print(f"Unique Users   : {unique_ips:,.0f}")
+    print(f"Avg Req/User   : {avg_requests_per_user:.2f}")
+    print("-" * 50)
+    print(f"Error Rate     : {error_rate:.2f}% ({error_count:,.0f} failed requests)")
+    print("="*50)
+
+
+def plot_weekly_heatmap(df, interval='1H', figsize=(20, 8), title=None):
+    """
+    Plots a heatmap of request intensity (Day of Week vs Time of Day).
+    
+    Args:
+        df (pd.DataFrame): The dataframe with a DatetimeIndex.
+        interval (str): The time frequency (e.g., '1H', '30T', '15T').
+        figsize (tuple): Figure size (width, height).
+        title (str): Output chart title.
+    """
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+
+    # 1. Resample to the desired interval
+    resampled = df.resample(interval).size()
+    
+    # 2. Group by Day Name and Time
+    heatmap_data = resampled.groupby([
+        resampled.index.day_name(),
+        resampled.index.time
+    ]).sum().unstack(fill_value=0)
+    
+    # 3. Sort rows by Day of Week
+    days_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    heatmap_data = heatmap_data.reindex(days_order)
+    
+    # 4. Calculate sensible xtick spacing based on total columns
+    # We generally aim for ~24 labels on the x-axis to represent hours
+    total_cols = heatmap_data.shape[1]
+    xticks_step = max(1, total_cols // 24)
+
+    # 5. Plot
+    plt.figure(figsize=figsize)
+    if title is None:
+        title = f'Request Intensity by {interval} Interval'
+        
+    sns.heatmap(heatmap_data, cmap='inferno', xticklabels=xticks_step)
+    
+    plt.title(title)
+    plt.xlabel('Time of Day')
+    plt.xticks(rotation=45)
+    plt.ylabel('Day of Week')
+    plt.yticks(rotation=0)
+    plt.show()
+
+def analyze_status_distribution(df, intervals=['1min', '5min', '15min']):
+    """
+    Analyzes and plots the distribution of 'Success' vs 'Error' requests over specified time intervals.
+
+    Args:
+        df (pd.DataFrame): The dataframe with a DatetimeIndex and 'status_label' column.
+        intervals (list): List of time frequencies to analyze (e.g., ['1min', '5min']).
+    """
+    import matplotlib.pyplot as plt
+    import pandas as pd
+    from IPython.display import display
+
+    for interval in intervals:
+        print(f"\n{'='*40}")
+        print(f"--- Analysis for {interval} Interval ---")
+        print(f"{'='*40}")
+        
+        # 1. Resample and count occurrences of each status_label
+        # Group by Time + Status Label, then unstack to get columns
+        status_counts = df.groupby([pd.Grouper(freq=interval), 'status_label']).size().unstack(fill_value=0)
+        
+
+        # 2. Plot Histograms for 'Success' and 'Error'
+        fig, axes = plt.subplots(1, 2, figsize=(15, 6))
+        
+        # --- Histogram for Success ---
+        if 'Success' in status_counts.columns:
+            # Drop 0s to see distribution of ACTIVE activity, or keep them if inactivity matters
+            # Usually for success, we have activity, but for errors, 0s dominate.
+            data = status_counts['Success']
+            data.plot(kind='hist', bins=50, ax=axes[0], color='green', alpha=0.7)
+            axes[0].set_title(f'Distribution of Success Requests per {interval}')
+            axes[0].set_xlabel('Requests Count per Interval')
+            axes[0].set_ylabel('Frequency')
+            axes[0].grid(True, alpha=0.3)
+
+        # --- Histogram for Error ---
+        error_col = 'Error' if 'Error' in status_counts.columns else None
+        
+        if error_col and status_counts[error_col].sum() > 0:
+            # We filter for >0 to see the shape of "When errors happen, how many are there?"
+            # Otherwise 99% of data is 0 and the plot is useless.
+            error_data = status_counts[error_col]
+            nonzero_errors = error_data[error_data > 0]
+            
+            if len(nonzero_errors) > 0:
+                axes[1].hist(nonzero_errors, bins=30, color='red', alpha=0.7)
+                axes[1].set_title(f'Distribution of Errors (Excluding Zero-Error Intervals)')
+                axes[1].set_xlabel('Error Count (when errors occur)')
+                axes[1].set_ylabel('Frequency')
+                axes[1].grid(True, alpha=0.3)
+                
+                # Add text about how many intervals were error-free
+                zero_count = (error_data == 0).sum()
+                total_count = len(error_data)
+                axes[1].text(0.95, 0.95, f"{zero_count}/{total_count} intervals\nhad 0 errors", 
+                             transform=axes[1].transAxes, ha='right', va='top', 
+                             bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+            else:
+                 axes[1].text(0.5, 0.5, "No Errors Found in Range", ha='center')
+
+        plt.tight_layout()
+        plt.show()
+        
+        # Optional: Print summary stats
+        cols_to_show = [c for c in ['Success', error_col] if c]
+        if cols_to_show:
+            print(f"Stats for {interval}:")
+            display(status_counts[cols_to_show].describe())
+
+
+def plot_weekly_patterns(df, interval='1H', figsize=(20, 24)):
+    """
+    Plots 3 heatmaps: Average Hits, Average Size, and Average Success Rate.
+    Aggregates historical data by (Day of Week, Time of Day) and takes the mean.
+    """
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import pandas as pd
+    import numpy as np
+
+    print(f"Processing data for {interval} patterns...")
+
+    # 1. Prepare Base Metrics (Resampled Time Series)
+    # We need to calculate these for every specific timestamp in history first.
+    resampler = df.resample(interval)
+    
+    # A. Total Hits (Count)
+    ts_hits = resampler.size()
+    
+    # B. Total Size (Sum)
+    ts_size = resampler['size'].sum()
+    
+    # C. Success Rate (Ratio)
+    # Count only 'Success' rows per interval
+    # Assuming 'status_label' exists. If not, use status code logic.
+    if 'status_label' in df.columns:
+        ts_success = df[df['status_label'] == 'Success'].resample(interval).size()
+    else:
+        # Fallback: assume status 200-299 is success
+        ts_success = df[(df['status'] >= 200) & (df['status'] < 300)].resample(interval).size()
+    
+    # Calculate ratio (handle division by zero if an interval has 0 hits)
+    # We use div and fillna(0) or NaN depending on preference. 
+    # Usually 0 hits = NaN success rate, but for heatmap 0 or 1 might be assumed. 
+    # Let's keep it as NaN for empty times to distinguish from 0% success.
+    ts_rate = ts_success.div(ts_hits)
+
+    # 2. Group by (Day Name, Time) and Take Mean
+    # We create a helper function to reshape for heatmap
+    def get_heatmap_matrix(series, agg_func='mean'):
+        grouped = series.groupby([series.index.day_name(), series.index.time])
+        # We take the mean across the weeks
+        agg_data = getattr(grouped, agg_func)().unstack()
+        
+        # Sort days
+        days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+        return agg_data.reindex(days)
+
+    matrix_hits = get_heatmap_matrix(ts_hits, 'mean')
+    matrix_size = get_heatmap_matrix(ts_size, 'mean')
+    matrix_rate = get_heatmap_matrix(ts_rate, 'mean')
+
+    # 3. Plotting
+    fig, axes = plt.subplots(3, 1, figsize=figsize)
+    
+    # X-ticks formatting
+    total_cols = matrix_hits.shape[1]
+    xticks_step = max(1, total_cols // 24)
+
+    # Heatmap 1: Average Hits
+    sns.heatmap(matrix_hits, ax=axes[0], cmap='inferno', xticklabels=xticks_step)
+    axes[0].set_title(f'Average Total Hits per {interval} (Load Pattern)')
+    axes[0].set_xlabel('')
+    axes[0].set_ylabel('Day of Week')
+    axes[0].tick_params(axis='y', rotation=0)
+    axes[0].tick_params(axis='x', rotation=45)
+
+    # Heatmap 2: Average Total Size
+    sns.heatmap(matrix_size, ax=axes[1], cmap='viridis', xticklabels=xticks_step)
+    axes[1].set_title(f'Average Total File Size (Bytes) per {interval} (Bandwidth Pattern)')
+    axes[1].set_xlabel('')
+    axes[1].set_ylabel('Day of Week')
+    axes[1].tick_params(axis='y', rotation=0)
+    axes[1].tick_params(axis='x', rotation=45)
+
+    # Heatmap 3: Success Rate
+    # success rate is 0.0 to 1.0. Use a diverging or distinct map.
+    sns.heatmap(matrix_rate, ax=axes[2], cmap='RdYlGn', xticklabels=xticks_step, vmin=0, vmax=1)
+    axes[2].set_title(f'Average Success Rate (0-1) per {interval} (Reliability Pattern)')
+    axes[2].set_xlabel('Time of Day')
+    axes[2].set_ylabel('Day of Week')
+    axes[2].tick_params(axis='y', rotation=0)
+    axes[2].tick_params(axis='x', rotation=45)
+
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_daily_profile(df, interval='30T', figsize=(15, 12)):
+    """
+    Plots the Average Daily Profile (00:00 to 23:59) aggregated across all days.
+    Shows 3 Line Plots: Average Hits, Average Size, and Average Success Rate.
+    """
+    import matplotlib.pyplot as plt
+    import pandas as pd
+    import numpy as np
+    
+    print(f"Generating daily profile (Time of Day analysis) for {interval} interval...")
+    
+    # 1. Resample first to chunk data correctly into history buckets
+    resampler = df.resample(interval)
+    
+    # Calculate base metrics for every interval in history
+    ts_hits = resampler.size()
+    ts_size = resampler['size'].sum()
+    
+    # Success Rate calculation
+    if 'status_label' in df.columns:
+        ts_success = df[df['status_label'] == 'Success'].resample(interval).size()
+    else:
+        # Fallback
+        ts_success = df[(df['status'] >= 200) & (df['status'] < 300)].resample(interval).size()
+        
+    # Calculate rate for each historical interval
+    ts_rate = ts_success.div(ts_hits)
+    
+    # 2. Group by Time of Day and Aggregate (Mean)
+    # This collapses "July 1 10:00", "July 2 10:00"... into just "10:00"
+    profile_hits = ts_hits.groupby(ts_hits.index.time).mean()
+    profile_size = ts_size.groupby(ts_size.index.time).mean()
+    profile_rate = ts_rate.groupby(ts_rate.index.time).mean()
+    
+    # 3. Plotting
+    fig, axes = plt.subplots(3, 1, figsize=figsize, sharex=True)
+    
+    # Prepare X-axis labels (convert time objects to strings)
+    times = [str(t) for t in profile_hits.index]
+    x_indices = range(len(times))
+    
+    # Plot 1: Hits
+    axes[0].plot(x_indices, profile_hits.values, color='#1f77b4', linewidth=2)
+    axes[0].set_title(f'Average Hits by Time of Day (Aggregated per {interval})', fontsize=14)
+    axes[0].set_ylabel('Avg Hits')
+    axes[0].grid(True, linestyle='--', alpha=0.5)
+    
+    # Plot 2: Size
+    axes[1].plot(x_indices, profile_size.values, color='#ff7f0e', linewidth=2)
+    axes[1].set_title('Average Total Size (Bytes)', fontsize=14)
+    axes[1].set_ylabel('Bytes')
+    axes[1].grid(True, linestyle='--', alpha=0.5)
+    
+    # Plot 3: Success Rate
+    axes[2].plot(x_indices, profile_rate.values, color='#2ca02c', linewidth=2)
+    axes[2].set_title('Average Success Rate (Reliability)', fontsize=14)
+    axes[2].set_ylabel('Rate (0-1)')
+    axes[2].set_ylim(-0.05, 1.05)
+    axes[2].grid(True, linestyle='--', alpha=0.5)
+    
+    # Smart X-Tick Formatting
+    # Ensure we don't have too many labels overlapping
+    step = max(1, len(times) // 24)
+    axes[2].set_xticks(x_indices[::step])
+    axes[2].set_xticklabels(times[::step], rotation=45)
+    
+    plt.xlabel('Time of Day')
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_file_type_stats(df, top_n=10, regex=r'\.([a-zA-Z0-9]+)$'):
+    """
+    Analyzes requests by File Extension (extracted from URL/Resource).
+    Plots distinct Count and Total Size for top file types.
+    """
+    import matplotlib.pyplot as plt
+    import pandas as pd
+    import re
+    
+    print("Analyzing File Types...")
+    
+    # Extract extension. This assumes 'resource' or 'request' column exists with path
+    # We will use string manipulation for speed
+    if 'resource' not in df.columns:
+        print("Error: 'resource' column required for file analysis")
+        return
+
+    # Extract extension using str.extract
+    # The regex looks for a dot followed by alphanumeric chars at the end of string
+    extensions = df['resource'].str.extract(regex, expand=False).str.lower().fillna('unknown')
+    
+    # Create a wrapper DF for aggregation
+    # We assign it temporarily to avoid modifying the original deeply
+    stats = pd.DataFrame({'ext': extensions, 'size': df['size']})
+    
+    # Aggregate
+    # Count = Popularity
+    # Sum = Bandwidth
+    agg = stats.groupby('ext')['size'].agg(['count', 'sum'])
+    
+    # Sort and Take Top N
+    top_by_count = agg.sort_values('count', ascending=False).head(top_n)
+    top_by_size = agg.sort_values('sum', ascending=False).head(top_n)
+    
+    # Plot
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+    
+    # Plot 1: Popularity
+    top_by_count['count'].plot(kind='bar', ax=axes[0], color='#1f77b4')
+    axes[0].set_title(f'Top {top_n} File Types by Request Count')
+    axes[0].set_ylabel('Number of Requests')
+    axes[0].grid(axis='y', linestyle='--', alpha=0.5)
+    axes[0].tick_params(axis='x', rotation=45)
+    
+    # Plot 2: Bandwidth
+    # Convert bytes to MB or GB for readability
+    (top_by_size['sum'] / 1024**2).plot(kind='bar', ax=axes[1], color='#ff7f0e')
+    axes[1].set_title(f'Top {top_n} File Types by Total Bandwidth (MB)')
+    axes[1].set_ylabel('Total Size (MB)')
+    axes[1].grid(axis='y', linestyle='--', alpha=0.5)
+    axes[1].tick_params(axis='x', rotation=45)
+    
+    plt.tight_layout()
+    plt.show()
+
+def plot_top_users(df, top_n=10):
+    """
+    Identifies top users (IPs) by Request Count and Traffic Volume.
+    """
+    import matplotlib.pyplot as plt
+    
+    print(f"Identifying Top {top_n} Users...")
+    
+    # 1. Identify Top IPs just by count first
+    user_counts = df['ip'].value_counts().head(top_n)
+    top_ips = user_counts.index.tolist()
+    
+    # 2. Filter data for these IP only and Pivot by Status
+    # We want rows=IPs, cols=Status Label
+    col_status = 'status_label' if 'status_label' in df.columns else 'status'
+    
+    subset = df[df['ip'].isin(top_ips)]
+    
+    # Cross-tabulation: Count of each status per IP
+    stacked_data = pd.crosstab(subset['ip'], subset[col_status])
+    
+    # Re-sort match the order of top_ips (usually Crosstab sorts alphabetically)
+    stacked_data = stacked_data.reindex(top_ips)
+    
+    # 3. Plot Stacked Bar
+    fig, ax = plt.subplots(figsize=(14, 8))
+    
+    # Use a distinct colormap like 'tab20' to handle many potential status codes
+    stacked_data.plot(kind='barh', stacked=True, ax=ax, cmap='tab20', edgecolor='none')
+    
+    ax.set_title(f'Top {top_n} Active Users (Breakdown by Request Status)')
+    ax.set_xlabel('Number of Requests')
+    ax.set_ylabel('IP Address')
+    ax.invert_yaxis() # Top user at top
+    ax.legend(title='Status', bbox_to_anchor=(1.05, 1), loc='upper left')
+    
+    plt.tight_layout()
+    plt.show()
+
+def plot_status_breakdown(df):
+    """
+    Visualizes the specific breakdown of HTTP Status Codes (not just Success/Error).
+    """
+    import matplotlib.pyplot as plt
+    try:
+        # Use simple status code if label doesn't exist
+        col = 'status_label' if 'status_label' in df.columns else 'status'
+        counts = df[col].value_counts()
+        
+        fig, axes = plt.subplots(1, 2, figsize=(16, 7))
+        
+        # Pie Chart (Cleaned up)
+        # We only label slices > 2% to avoid clutter, put rest in legend
+        def autopct_filter(pct):
+            return ('%1.1f%%' % pct) if pct > 2 else ''
+
+        counts.plot(kind='pie', ax=axes[0], autopct=autopct_filter, startangle=90, cmap='Pastel1', labels=None)
+        axes[0].set_ylabel('')
+        axes[0].set_title('Status Code Distribution')
+        axes[0].legend(labels=counts.index, loc="best", bbox_to_anchor=(1, 0.5))
+        
+        # Log Scale Bar Chart (to see rare errors)
+        counts.plot(kind='bar', ax=axes[1], color='teal', log=True)
+        axes[1].set_title('Status Counts (Log Scale)')
+        axes[1].grid(axis='y', alpha=0.3)
+        axes[1].tick_params(axis='x', rotation=45)
+        
+        plt.tight_layout()
+        plt.show()
+    except Exception as e:
+        print(f"Could not plot status breakdown: {e}")
+
+def plot_rolling_statistics(df, window='1H', figsize=(20, 8)):
+    """
+    Plots the Total Hits per interval with Rolling Mean and Rolling Std Dev bands (Bollinger Bands logic).
+    Useful for spotting trends and volatility changes.
+    """
+    import matplotlib.pyplot as plt
+    
+    print(f"Calculating Rolling Statistics (window={window})...")
+    
+    # 1. Resample
+    # Ensure no gaps, fill with 0
+    ts = df.resample('10T').size().fillna(0) # Base resolution 10 mins for better rolling smoothness
+    
+    # 2. Calculate Rolling
+    # We use a window corresponding to the input argument string logic or simple integer
+    # Let's convert window string to integer bins if possible, or just use time-based string
+    roller = ts.rolling(window=window)
+    roll_mean = roller.mean()
+    roll_std = roller.std()
+    
+    # 3. Plot
+    fig, ax = plt.subplots(figsize=figsize)
+    
+    # Raw Data (faint)
+    ax.plot(ts.index, ts, label='Raw Traffic (10min)', color='gray', alpha=0.3)
+    
+    # Moving Average
+    ax.plot(roll_mean.index, roll_mean, label=f'Rolling Mean ({window})', color='blue', linewidth=2)
+    
+    # Bands (+/- 2 or 3 STD)
+    upper_band = roll_mean + (3 * roll_std)
+    lower_band = roll_mean - (3 * roll_std)
+    
+    ax.fill_between(roll_mean.index, lower_band, upper_band, color='blue', alpha=0.1, label='3-Sigma Band')
+    
+    ax.set_title(f'Traffic Volatility & Trend Analysis (Window: {window})')
+    ax.set_ylabel('Hits per 10min')
+    ax.legend()
+    ax.grid(True, linestyle='--', alpha=0.5)
+    
+    plt.show()
+
+def plot_anomaly_spikes(df, interval='5T', threshold_z=3):
+    """
+    Detects and plots anomalies using Z-Score method.
+    Anomalies are points where (Value - Mean) / Std > threshold.
+    """
+    import matplotlib.pyplot as plt
+    import numpy as np
+    
+    print("Detecting Anomalies...")
+    
+    # 1. Prep Data
+    ts = df.resample(interval).size().fillna(0)
+    
+    # 2. Calculate Z-Score
+    # We use global mean/std for viewing overall outliers. 
+    # For local outliers, we'd use rolling logic (like above). 
+    # Let's stick to global outliers for "Extreme Events".
+    mean_val = ts.mean()
+    std_val = ts.std()
+    
+    z_scores = (ts - mean_val) / std_val
+    
+    # 3. Filter Anomalies
+    anomalies = ts[np.abs(z_scores) > threshold_z]
+    
+    # 4. Plot
+    fig, ax = plt.subplots(figsize=(20, 8))
+    
+    # Normal Data
+    ax.plot(ts.index, ts, label='Normal Traffic', color='#1f77b4', alpha=0.6)
+    
+    # Anomalies
+    ax.scatter(anomalies.index, anomalies, color='red', s=50, label=f'Anomalies (Z > {threshold_z})', zorder=5)
+    
+    # Threshold Line
+    ax.axhline(mean_val + (threshold_z * std_val), color='red', linestyle='--', alpha=0.5, label='Threshold Limit')
+    
+    ax.set_title(f'Anomaly Detection (Z-Score Method, Threshold={threshold_z})')
+    ax.set_ylabel(f'Hits per {interval}')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    # Annotate Top 3 Spikes
+    if len(anomalies) > 0:
+        top_3 = anomalies.sort_values(ascending=False).head(3)
+        for date, val in top_3.items():
+            ax.annotate(f'{int(val)} hits', 
+                        xy=(date, val), 
+                        xytext=(0, 10), 
+                        textcoords='offset points', 
+                        ha='center', fontsize=9, color='red', weight='bold')
+
+    plt.show()
+
+def plot_status_evolution(df, interval='1D'):
+    """
+    Plots the evolution of HTTP status codes over time using a Stacked Area Chart.
+    Useful for seeing how the proportion of 200 vs 404 vs 500 changes.
+    """
+    import matplotlib.pyplot as plt
+    import pandas as pd
+    
+    print(f"Calculating Status Evolution (interval={interval})...")
+    
+    # Group by Time + Status
+    # We use unstack to create columns for each status code (or label)
+    col = 'status_label' if 'status_label' in df.columns else 'status'
+    evolution = df.groupby([pd.Grouper(freq=interval), col]).size().unstack(fill_value=0)
+    
+    # Sort columns by total frequency so major statuses are at the bottom
+    top_statuses = evolution.sum().sort_values(ascending=False).index
+    evolution = evolution[top_statuses]
+    
+    # Plot
+    fig, ax = plt.subplots(figsize=(20, 8))
+    
+    evolution.plot(kind='area', stacked=True, ax=ax, cmap='tab20', alpha=0.9)
+    
+    ax.set_title(f'Evolution of HTTP Status Codes over Time ({interval})')
+    ax.set_ylabel('Request Count')
+    ax.set_xlabel('Date')
+    # Legend outside
+    ax.legend(loc='upper left', bbox_to_anchor=(1, 1), title='Status')
+    ax.grid(True, linestyle='--', alpha=0.4)
+    
+    plt.tight_layout()
+    plt.show()
+
+def plot_size_distribution(df):
+    """
+    Plots the distribution of Response Sizes (Bytes) using Log Scales.
+    Helps distinguish between 'Tiny Responses' (Redirects/Errors) vs 'Large Assets'.
+    """
+    import matplotlib.pyplot as plt
+    import numpy as np
+    
+    print("Analyzing Response Size Distribution...")
+    
+    # Filter out 0-byte responses (usually 304s or errors) for the log plot
+    sizes = df['size']
+    nonzero_sizes = sizes[sizes > 0]
+    
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+    
+    # 1. Linear Scale (Good for identifying if everything is small)
+    axes[0].hist(sizes, bins=50, color='gray', alpha=0.7)
+    axes[0].set_title('File Size Distribution (Linear Scale)')
+    axes[0].set_xlabel('Bytes')
+    axes[0].set_ylabel('Frequency')
+    
+    # 2. Log Scale (Good for spanning orders of magnitude)
+    if len(nonzero_sizes) > 0:
+        log_bins = np.logspace(np.log10(max(1, nonzero_sizes.min())), np.log10(nonzero_sizes.max()), 50)
+        axes[1].hist(nonzero_sizes, bins=log_bins, color='purple', alpha=0.7)
+        axes[1].set_title('File Size Distribution (Log-X Scale)')
+        axes[1].set_xlabel('Bytes (Log Scale)')
+        axes[1].set_xscale('log')
+        axes[1].set_ylabel('Frequency')
+        axes[1].grid(True, which="both", ls="--", alpha=0.3)
+    
+    plt.tight_layout()
+    plt.show()
+    
+    # Print quick stats
+    print(f"Zero-byte responses: {(sizes == 0).sum()} ({ (sizes == 0).mean():.1%})")
+    print(f"Small files (<1KB): {(sizes < 1024).sum()} ({ (sizes < 1024).mean():.1%})")
+    print(f"Large files (>1MB): {(sizes > 1024**2).sum()} ({ (sizes > 1024**2).mean():.1%})")
