@@ -124,10 +124,13 @@ class rvfl():
         self.model_name = model_name
 
     def load_archive(self):
-        with open(f'artifact/{self.model_name}.pkl', 'rb') as f:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        artifact_path = os.path.join(current_dir, 'artifact', f'{self.model_name}.pkl')
+        with open(artifact_path, 'rb') as f:
             model = pickle.load(f)
 
         return model
+
 
     def predict(self, X):
 

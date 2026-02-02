@@ -13,7 +13,9 @@ class ARIMAS():
         self.output_size = output_size
 
     def load_archive(self):
-        model = SARIMAXResults.load("artifact/sarimax.pkl")
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        artifact_path = os.path.join(current_dir, 'artifact', 'sarimax.pkl')
+        model = SARIMAXResults.load(artifact_path)
 
         return model
 

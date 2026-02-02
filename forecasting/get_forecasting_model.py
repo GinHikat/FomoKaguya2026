@@ -211,7 +211,7 @@ class Predictor():
         X_tensor = torch.tensor(X, dtype=torch.float32)
         y_tensor = torch.tensor(y, dtype=torch.float32).reshape(-1, 1)
 
-        return X, y
+        return X_tensor, y_tensor
 
     def arima_input(self, df, target = 'size'):
         '''
@@ -257,6 +257,8 @@ class Predictor():
             'dl': ['lstm', 'bilstm', 'transformer', 'bilstm_attention'],
             'arima': ['sarimax']
         }
+
+        model_= None
 
         for key, value in model_type.items():
             if self.model_name in value:

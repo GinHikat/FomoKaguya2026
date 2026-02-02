@@ -5,3 +5,6 @@ torch
 statsmodels
 emd-signal
 streamlit
+numpy
+pandas
+scikit-learn
