@@ -225,7 +225,7 @@ class Predictor():
         '''
         df_agg = self.agg_df(df)
 
-        return df_agg, df_agg['size'].values
+        return df_agg, np.log1p(df_agg['size'].values)
         
     def get_prediction(self, df):
         '''

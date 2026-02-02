@@ -23,4 +23,8 @@ class ARIMAS():
         
         y_pred = model.forecast(steps = self.output_size, exog = X[exog])
 
-        return np.array(y_pred)
+        y = np.array(y_pred)
+        y[y < 0] = 0
+        y = np.log1p(y)
+
+        return y
