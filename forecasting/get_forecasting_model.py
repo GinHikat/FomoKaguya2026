@@ -11,9 +11,9 @@ project_root = os.path.abspath(os.path.join(os.getcwd(), ".."))
 if project_root not in sys.path:
     sys.path.append(project_root)
 
-from dl import *
-from rvfl import *
-from ml import *
+from forecasting.dl import *
+from forecasting.rvfl import *
+from forecasting.ml import *
 
 class Predictor():
     def __init__(self, model_name, interval):

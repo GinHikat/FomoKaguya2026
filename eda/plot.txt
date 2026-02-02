@@ -1,0 +1,15 @@
+1. Overall (1 main plot)
+- Overall line plot (and button to change to 1min, 5min, 15min, 1h)
+- Average hit ratio/ error rate per interval (also plot in 1 lineplot)
+
+2. Detail
+- Top 10 domains that send most request
+- Top 10 File types 
+- Top active IPs
+- Mean hits/ file size/ % Success rate in 1 day
+
+3. Hypothesis
+
+- Traffic follows a cycle with pattern
+- High traffic IP occurs at specific time in a day/ month
+- High frequency -> large file size, or vice versa, or no relation
