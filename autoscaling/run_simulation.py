@@ -73,7 +73,7 @@ def main():
     # Wrapper for DP trajectory to play back decisions in Simulator.
     class DPReplayPolicy:
         def __init__(self, trajectory):
-            self.trajectory = {step["time_step"]: step["servers"] for step in trajectory}
+            self.trajectory = {step["time_step"]: step["servers_provisioned"] for step in trajectory}
             # trajectory provides 'servers' (provisioned).
             self.max_step = max(self.trajectory.keys())
             
