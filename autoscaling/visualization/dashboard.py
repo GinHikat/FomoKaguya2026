@@ -76,7 +76,7 @@ if forecast_mode == "Oracle (Actuals)":
 else:
      # Real Forecast
      if "forecasting" not in config:
-          config["forecasting"] = {"model": "bilstm_attention", "window_size": 60}
+          config["forecasting"] = {"model": "bilstm_attention"}
      
      full_data_path = os.path.abspath(data_path)
      
