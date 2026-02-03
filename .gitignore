@@ -1,7 +1,6 @@
 .env
 
 *.csv
-*.txt
 
 /secret
 
@@ -9,3 +8,9 @@
 *.cache*
 
 data/
+
+__pycache__/
+
+Autoscaling_Analysis.pdf
+autoscaling/plan.md
+sensitivity_heatmap.png

@@ -1,0 +1,30 @@
+random_seed: 42
+cost_parameters:
+  server_cost: 0.05             # per minute
+  scale_cost: 0.20              # per operation
+  violation_cost: 0.000005      # per byte (approx $5/GB)
+  startup_time: 3               # minutes
+  capacity_per_server: 1200000  # 1.2 MB/min capacity
+
+thresholds:
+  reactive:
+    high: 0.75
+    low: 0.30
+  predictive:
+    high: 0.70
+    low: 0.35
+  hybrid:
+    out: 0.75
+    in: 0.40
+    emergency: 0.90
+    hysteresis_time: 15         # minutes (custom parameter for hysteresis logic)
+
+simulation:
+  cooldown_minutes: 5
+  min_servers: 1
+  max_servers: 5
+  interval: "1min"              # Simulation step size
+
+forecasting:
+  model: "bilstm_attention"
+  window_size: 60
