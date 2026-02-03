@@ -624,3 +624,175 @@ def plot_size_distribution(df):
     print(f"Zero-byte responses: {(sizes == 0).sum()} ({ (sizes == 0).mean():.1%})")
     print(f"Small files (<1KB): {(sizes < 1024).sum()} ({ (sizes < 1024).mean():.1%})")
     print(f"Large files (>1MB): {(sizes > 1024**2).sum()} ({ (sizes > 1024**2).mean():.1%})")
+
+
+def plot_autocorrelation(df, metric='hits', interval='1H', lags=72, figsize=(20, 6)):
+    """
+    Plots the Autocorrelation Function (ACF) of various metrics to confirm cyclic patterns.
+    Args:
+        metric (str): 'hits', 'size', or 'rate'.
+    """
+    import matplotlib.pyplot as plt
+    from statsmodels.graphics.tsaplots import plot_acf
+
+    print(f"Calculating Autocorrelation for {metric}...")
+
+    # Prepare Time Series based on metric
+    if metric == 'hits':
+        ts = df.resample(interval).size().fillna(0)
+        title = f'Autocorrelation of Traffic Hits (Interval={interval})'
+    elif metric == 'size':
+        ts = df.resample(interval)['size'].sum().fillna(0)
+        title = f'Autocorrelation of Total File Size (Interval={interval})'
+    elif metric == 'rate':
+        # Result rate = Success / Total
+        if 'status_label' in df.columns:
+            ts_success = df[df['status_label'] == 'Success'].resample(interval).size()
+        else:
+            ts_success = df[(df['status'] >= 200) & (df['status'] < 300)].resample(interval).size()
+        
+        ts_total = df.resample(interval).size()
+        # fillna(0) for intervals with no traffic
+        ts = ts_success.div(ts_total).fillna(0)
+        title = f'Autocorrelation of Success Rate (Interval={interval})'
+    else:
+        raise ValueError(f"Unknown metric: {metric}")
+
+    fig, ax = plt.subplots(figsize=figsize)
+    plot_acf(ts, lags=lags, ax=ax, title=title)
+    ax.set_xlabel(f'Lags ({interval})')
+    ax.set_ylabel('Correlation')
+    ax.grid(True, alpha=0.3)
+    
+    # Highlight 24h periods if interval is 1H
+    if interval == '1H':
+        for i in range(24, lags + 1, 24):
+            ax.axvline(x=i, color='red', linestyle='--', alpha=0.5)
+            ax.text(i, 0.5, f'{i}h', color='red', ha='center', va='bottom')
+
+    plt.show()
+
+
+def plot_top_ips_activity(df, top_n=10, figsize=(20, 10)):
+    """
+    Visualizes WHEN the top active IPs are accessing the server.
+    Uses a scatter plot (Time of Day vs IP).
+    """
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    print(f"Analyzing Time-of-Day Activity for Top {top_n} IPs...")
+
+    # 1. Identify Top IPs
+    top_ips = df['ip'].value_counts().head(top_n).index.tolist()
+    
+    # 2. Filter Data
+    subset = df[df['ip'].isin(top_ips)].copy()
+    
+    # 3. Extract Time of Day (Hour + Minute/60)
+    subset['hour_float'] = subset.index.hour + subset.index.minute / 60.0
+    
+    # 4. Plot
+    plt.figure(figsize=figsize)
+    # Using stripplot for scatter-like categorical plotting
+    sns.stripplot(x='hour_float', y='ip', data=subset, jitter=0.2, alpha=0.5, hue='ip', palette='tab10', legend=False)
+    
+    plt.title(f'Activity Times of Top {top_n} IPs')
+    plt.xlabel('Time of Day (Hour)')
+    plt.ylabel('IP Address')
+    plt.xticks(range(0, 25, 1))
+    plt.grid(True, axis='x', linestyle='--', alpha=0.5)
+    plt.xlim(0, 24)
+    plt.show()
+
+
+def plot_frequency_vs_size(df, figsize=(12, 8)):
+    """
+    Testing Hypothesis: "High frequency -> large file size, or vice versa".
+    Scatter plot of Resource Hit Count vs Average Resource Size.
+    """
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import numpy as np
+
+    print("Correlating Resource Frequency vs Size...")
+
+    if 'resource' not in df.columns:
+        print("Error: 'resource' column missing.")
+        return
+
+    # 1. Group by Resource
+    # Calculate Count and Mean Size
+    resource_stats = df.groupby('resource')['size'].agg(['count', 'mean'])
+    
+    # Filter out 0-size if needed (optional)
+    # resource_stats = resource_stats[resource_stats['mean'] > 0]
+    
+    # 2. Plot
+    fig, ax = plt.subplots(figsize=figsize)
+    
+    # Use log scales because counts and sizes span orders of magnitude
+    ax.scatter(resource_stats['count'], resource_stats['mean'], alpha=0.3, color='purple', edgecolors='w', s=30)
+    
+    ax.set_title('Hypothesis Check: Resource Frequency vs File Size')
+    ax.set_xlabel('Hit Count (Log Scale)')
+    ax.set_ylabel('Average File Size Bytes (Log Scale)')
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.grid(True, which="both", ls="--", alpha=0.3)
+    
+    # Add trend line?
+    # Simple correlation
+    corr = resource_stats.corr().iloc[0, 1]
+    ax.text(0.05, 0.95, f'Correlation: {corr:.2f}', transform=ax.transAxes, 
+            fontsize=12, bbox=dict(facecolor='white', alpha=0.8))
+
+    plt.show()
+
+
+def plot_weekday_vs_weekend(df, interval='1H', figsize=(12, 6)):
+    """
+    Hypothesis: Traffic at weekday < traffic at weekend.
+    Plots distribution of hits comparing Weekdays vs Weekends.
+    """
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import pandas as pd
+
+    print("Comparing Weekday vs Weekend Traffic...")
+
+    # 1. Resample counts
+    ts = df.resample(interval).size()
+    
+    # 2. Create Analysis DataFrame
+    analysis = pd.DataFrame({'hits': ts})
+    analysis['day_name'] = analysis.index.day_name()
+    # 5=Saturday, 6=Sunday
+    analysis['is_weekend'] = analysis.index.dayofweek >= 5 
+    analysis['Category'] = analysis['is_weekend'].map({True: 'Weekend', False: 'Weekday'})
+    
+    # 3. Calculate Means
+    means = analysis.groupby('Category')['hits'].mean()
+    print("Mean Traffic per Interval:")
+    print(means)
+    
+    # 4. Plot Boxplot
+    fig, axes = plt.subplots(1, 2, figsize=figsize)
+    
+    # Boxplot
+    sns.boxplot(x='Category', y='hits', data=analysis, ax=axes[0], palette='Set2')
+    axes[0].set_title(f'Traffic Distribution ({interval})')
+    axes[0].set_ylabel('Hits')
+    
+    # Barplot for Means
+    means.plot(kind='bar', ax=axes[1], color=['#66c2a5', '#fc8d62'], alpha=0.8)
+    axes[1].set_title('Average Traffic: Weekday vs Weekend')
+    axes[1].set_ylabel('Average Hits')
+    axes[1].tick_params(axis='x', rotation=0)
+    
+    # Annotate means
+    for i, v in enumerate(means):
+        axes[1].text(i, v, f'{v:.0f}', ha='center', va='bottom', fontweight='bold')
+
+    plt.tight_layout()
+    plt.show()
