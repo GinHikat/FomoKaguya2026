@@ -249,7 +249,6 @@ class Predictor():
             - sarima (15')
         '''
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        print("Using:", device)
 
         model_type = {
             'ml': ['xgboost', 'lgbm'],
@@ -257,6 +256,8 @@ class Predictor():
             'dl': ['lstm', 'bilstm', 'transformer', 'bilstm_attention'],
             'arima': ['sarimax']
         }
+
+        model_= None
 
         for key, value in model_type.items():
             if self.model_name in value:
@@ -279,7 +280,7 @@ class Predictor():
 
         y_pred = model.predict(X)
         
-        return X,y,y_pred
+        return X, y, y_pred
 
         
 

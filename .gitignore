@@ -13,6 +13,8 @@ __pycache__/
 
 .gitattributes
 
+.ipynb_checkpoints/
+
 Autoscaling_Analysis.pdf
 autoscaling/plan.md
 sensitivity_heatmap.png

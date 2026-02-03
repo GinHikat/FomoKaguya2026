@@ -9,10 +9,9 @@ class ML():
         self.model_name = model_name
 
     def load_archive(self):
-        base_dir = Path(__file__).resolve().parent
-        artifact_dir = base_dir / "artifact"
-
-        with open(artifact_dir/f'{self.model_name}.pkl', 'rb') as f:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        artifact_path = os.path.join(current_dir, 'artifact', f'{self.model_name}.pkl')
+        with open(artifact_path, 'rb') as f:
             model = pickle.load(f)
 
         return model

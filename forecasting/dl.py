@@ -10,7 +10,6 @@ import os
 from pathlib import Path
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print("Using:", device)
 
 class LSTM(nn.Module):
     def __init__(self, input_size, lstm_hidden=64, mlp_hidden1=32, mlp_hidden2=16,
@@ -213,11 +212,10 @@ class DL():
             raise ValueError(f"Unknown model name: {self.model_name}")
 
     def load_statedict(self):
-        if self.model_name == 'lstm':
+        if self.model_name == 'bilstm':
             model = LSTM(input_size=self.input_dim, output_size=1, dropout=0.5).to(device)
         if self.model_name == 'bilstm_attention':
             model = LSTMSelfAttention(input_size = self.input_dim).to(device)
-
 
         base_dir = Path(__file__).resolve().parent
         artifact_dir = base_dir / "artifact"
@@ -228,11 +226,15 @@ class DL():
         return model
 
     def predict(self, X):
-        self.load_statedict()
+        self.model = self.load_statedict()
         self.model.to(device)
         self.model.eval()
         with torch.no_grad():
-            X_tensor = torch.tensor(X, dtype=torch.float32).to(device)
+            if isinstance(X, torch.Tensor):
+                X_tensor = X.detach().clone().to(device, dtype=torch.float32)
+            else:
+                X_tensor = torch.from_numpy(X).to(device, dtype=torch.float32)
+
             y_pred_tensor = self.model(X_tensor).cpu()
 
         y_pred = y_pred_tensor.numpy().ravel()

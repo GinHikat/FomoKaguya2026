@@ -8,3 +8,6 @@ gspread
 torch
 statsmodels
 emd-signal
+numpy
+pandas
+scikit-learn
