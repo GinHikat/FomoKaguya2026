@@ -424,7 +424,7 @@ def plot_top_users(df, top_n=10):
     # Use a distinct colormap like 'tab20' to handle many potential status codes
     stacked_data.plot(kind='barh', stacked=True, ax=ax, cmap='tab20', edgecolor='none')
     
-    ax.set_title(f'Top {top_n} Active Users (Breakdown by Request Status)')
+    ax.set_title(f'Top {top_n} Domains by Total Request Count (Breakdown by Request Status)')
     ax.set_xlabel('Number of Requests')
     ax.set_ylabel('IP Address')
     ax.invert_yaxis() # Top user at top
