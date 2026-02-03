@@ -15,9 +15,9 @@ sys.modules['__main__'].RVFL = RVFL
 
 from forecasting.get_forecasting_model import Predictor
 
-processed_test= "data/processed/test.csv"
-
 # Expect that you run app.py in main dir
+
+processed_test= "data/processed/test.csv"
 
 st.title("Forecasting")
 
