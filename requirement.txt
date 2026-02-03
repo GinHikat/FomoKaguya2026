@@ -11,3 +11,4 @@ emd-signal
 numpy
 pandas
 scikit-learn
+scipy

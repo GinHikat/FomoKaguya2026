@@ -155,37 +155,37 @@ class Processor():
 
         return metrics
 
-# if __name__ == '__main__':
+if __name__ == '__main__':
 
-#     processor = Processor()
+    processor = Processor()
 
-#     with open(os.path.join(project_root, 'data', 'original', 'train.txt'), 'r', encoding='utf-8') as f:
-#         train = f.readlines()
+    with open(os.path.join(project_root, 'data', 'original', 'train.txt'), 'r', encoding='utf-8') as f:
+        train = f.readlines()
     
-#     print(f'Read {len(train)} lines from train.txt')
+    print(f'Read {len(train)} lines from train.txt')
 
-#     with open(os.path.join(project_root, 'data', 'original', 'test.txt'), 'r', encoding='utf-8') as f:
-#         test = f.readlines()
+    with open(os.path.join(project_root, 'data', 'original', 'test.txt'), 'r', encoding='utf-8') as f:
+        test = f.readlines()
     
-#     print(f'Read {len(test)} lines from test.txt')
+    print(f'Read {len(test)} lines from test.txt')
     
-#     print('Processing train')
-#     processor.batch_streaming_ingestion(train, output_path = os.path.join(project_root, 'data', 'processed', 'train.csv'))
+    print('Processing train')
+    processor.batch_streaming_ingestion(train, output_path = os.path.join(project_root, 'data', 'processed', 'train.csv'))
 
-#     print('Processing test')
-#     processor.batch_streaming_ingestion(test, output_path = os.path.join(project_root, 'data', 'processed', 'test.csv'))
+    print('Processing test')
+    processor.batch_streaming_ingestion(test, output_path = os.path.join(project_root, 'data', 'processed', 'test.csv'))
 
-#     train_df = pd.read_csv(os.path.join(project_root, 'data', 'processed', 'train.csv'))
-#     test_df = pd.read_csv(os.path.join(project_root, 'data', 'processed', 'test.csv'))
+    train_df = pd.read_csv(os.path.join(project_root, 'data', 'processed', 'train.csv'))
+    test_df = pd.read_csv(os.path.join(project_root, 'data', 'processed', 'test.csv'))
 
-#     print('Extracting additional info from train')
-#     train_metrics = processor.extract_additional_info(train_df)
-#     print('Extracting additional info from test')
-#     test_metrics = processor.extract_additional_info(test_df)
+    print('Extracting additional info from train')
+    train_metrics = processor.extract_additional_info(train_df)
+    print('Extracting additional info from test')
+    test_metrics = processor.extract_additional_info(test_df)
 
-#     metrics = pd.concat([train_metrics, test_metrics], axis = 0)
+    metrics = pd.concat([train_metrics, test_metrics], axis = 0)
 
-#     metrics.to_csv(os.path.join(project_root, 'data', 'processed', 'for_viz.csv'), index=False)
+    metrics.to_csv(os.path.join(project_root, 'data', 'processed', 'for_viz.csv'), index=False)
 
-#     print('Done!')
+    print('Done!')
 
