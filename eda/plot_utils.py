@@ -98,75 +98,86 @@ def plot_weekly_heatmap(df, interval='1H', figsize=(20, 8), title=None):
     plt.yticks(rotation=0)
     plt.show()
 
-def analyze_status_distribution(df, intervals=['1min', '5min', '15min']):
+def analyze_status_distribution(df, interval='5T'):
     """
-    Analyzes and plots the distribution of 'Success' vs 'Error' requests over specified time intervals.
+    Analyzes and plots the distribution of 'Success' vs 'Error' requests for a specified time interval.
 
     Args:
         df (pd.DataFrame): The dataframe with a DatetimeIndex and 'status_label' column.
-        intervals (list): List of time frequencies to analyze (e.g., ['1min', '5min']).
+        interval (str): Time frequency to analyze (e.g., '1min', '5T').
     """
     import matplotlib.pyplot as plt
     import pandas as pd
     from IPython.display import display
 
-    for interval in intervals:
-        print(f"\n{'='*40}")
-        print(f"--- Analysis for {interval} Interval ---")
-        print(f"{'='*40}")
-        
-        # 1. Resample and count occurrences of each status_label
-        # Group by Time + Status Label, then unstack to get columns
-        status_counts = df.groupby([pd.Grouper(freq=interval), 'status_label']).size().unstack(fill_value=0)
-        
+    print(f"Analyzing Status Distribution for {interval} Interval...")
+    
+    # 1. Resample and count occurrences of each status_label
+    # Group by Time + Status Label, then unstack to get columns
+    col = 'status_label' if 'status_label' in df.columns else 'status'
+    status_counts = df.groupby([pd.Grouper(freq=interval), col]).size().unstack(fill_value=0)
+    
 
-        # 2. Plot Histograms for 'Success' and 'Error'
-        fig, axes = plt.subplots(1, 2, figsize=(15, 6))
-        
-        # --- Histogram for Success ---
-        if 'Success' in status_counts.columns:
-            # Drop 0s to see distribution of ACTIVE activity, or keep them if inactivity matters
-            # Usually for success, we have activity, but for errors, 0s dominate.
-            data = status_counts['Success']
-            data.plot(kind='hist', bins=50, ax=axes[0], color='green', alpha=0.7)
-            axes[0].set_title(f'Distribution of Success Requests per {interval}')
-            axes[0].set_xlabel('Requests Count per Interval')
-            axes[0].set_ylabel('Frequency')
-            axes[0].grid(True, alpha=0.3)
+    # 2. Plot Histograms for 'Success' and 'Error'
+    fig, axes = plt.subplots(1, 2, figsize=(15, 6))
+    
+    # --- Histogram for Success ---
+    if 'Success' in status_counts.columns:
+        # Drop 0s to see distribution of ACTIVE activity
+        data = status_counts['Success']
+        data.plot(kind='hist', bins=50, ax=axes[0], color='green', alpha=0.7)
+        axes[0].set_title(f'Distribution of Success Requests per {interval}')
+        axes[0].set_xlabel('Requests Count per Interval')
+        axes[0].set_ylabel('Frequency')
+        axes[0].grid(True, alpha=0.3)
+    else:
+        axes[0].text(0.5, 0.5, "No 'Success' Data", ha='center')
 
-        # --- Histogram for Error ---
-        error_col = 'Error' if 'Error' in status_counts.columns else None
+    # --- Histogram for Error ---
+    error_cols = [c for c in status_counts.columns if c != 'Success']
+    # If we have explicit 'Error' column or multiple distinct error codes
+    # The original logic looked for 'Error' label specifically, assuming 'status_label' mapped things to Success/Error/etc.
+    # Let's try to find 'Error' column if it exists, or sum others? 
+    # Original code: error_col = 'Error' if 'Error' in status_counts.columns else None
+    
+    error_col = 'Error' if 'Error' in status_counts.columns else None
+    
+    # If no explicit 'Error' column, but we have others (like 404, 500 etc if status_label wasn't used), 
+    # we might want to sum them? 
+    # For now, let's stick to original logic: check for 'Error'.
+    
+    if error_col and status_counts[error_col].sum() > 0:
+        error_data = status_counts[error_col]
+        nonzero_errors = error_data[error_data > 0]
         
-        if error_col and status_counts[error_col].sum() > 0:
-            # We filter for >0 to see the shape of "When errors happen, how many are there?"
-            # Otherwise 99% of data is 0 and the plot is useless.
-            error_data = status_counts[error_col]
-            nonzero_errors = error_data[error_data > 0]
+        if len(nonzero_errors) > 0:
+            axes[1].hist(nonzero_errors, bins=30, color='red', alpha=0.7)
+            axes[1].set_title(f'Distribution of Errors (Excluding Zero-Error Intervals)')
+            axes[1].set_xlabel('Error Count (when errors occur)')
+            axes[1].set_ylabel('Frequency')
+            axes[1].grid(True, alpha=0.3)
             
-            if len(nonzero_errors) > 0:
-                axes[1].hist(nonzero_errors, bins=30, color='red', alpha=0.7)
-                axes[1].set_title(f'Distribution of Errors (Excluding Zero-Error Intervals)')
-                axes[1].set_xlabel('Error Count (when errors occur)')
-                axes[1].set_ylabel('Frequency')
-                axes[1].grid(True, alpha=0.3)
-                
-                # Add text about how many intervals were error-free
-                zero_count = (error_data == 0).sum()
-                total_count = len(error_data)
-                axes[1].text(0.95, 0.95, f"{zero_count}/{total_count} intervals\nhad 0 errors", 
-                             transform=axes[1].transAxes, ha='right', va='top', 
-                             bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
-            else:
-                 axes[1].text(0.5, 0.5, "No Errors Found in Range", ha='center')
+            # Add text about how many intervals were error-free
+            zero_count = (error_data == 0).sum()
+            total_count = len(error_data)
+            axes[1].text(0.95, 0.95, f"{zero_count}/{total_count} intervals\nhad 0 errors", 
+                         transform=axes[1].transAxes, ha='right', va='top', 
+                         bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+        else:
+             axes[1].text(0.5, 0.5, "No Errors Found in Range", ha='center')
+    else:
+        # If we didn't find 'Error' col but have other columns, maybe show them?
+        # But to be safe and consistent with previous behavior:
+        axes[1].text(0.5, 0.5, "No 'Error' labeled data found", ha='center')
 
-        plt.tight_layout()
-        plt.show()
-        
-        # Optional: Print summary stats
-        cols_to_show = [c for c in ['Success', error_col] if c]
-        if cols_to_show:
-            print(f"Stats for {interval}:")
-            display(status_counts[cols_to_show].describe())
+    plt.tight_layout()
+    plt.show()
+    
+    # Optional: Print summary stats
+    cols_to_show = [c for c in ['Success', error_col] if c]
+    if cols_to_show:
+        print(f"Stats for {interval}:")
+        display(status_counts[cols_to_show].describe())
 
 
 def plot_weekly_patterns(df, interval='1H', figsize=(20, 24)):
@@ -246,7 +257,7 @@ def plot_weekly_patterns(df, interval='1H', figsize=(20, 24)):
 
     # Heatmap 3: Success Rate
     # success rate is 0.0 to 1.0. Use a diverging or distinct map.
-    sns.heatmap(matrix_rate, ax=axes[2], cmap='RdYlGn', xticklabels=xticks_step, vmin=0, vmax=1)
+    sns.heatmap(matrix_rate, ax=axes[2], cmap='RdYlGn', xticklabels=xticks_step, vmin=0.8, vmax=1)
     axes[2].set_title(f'Average Success Rate (0-1) per {interval} (Reliability Pattern)')
     axes[2].set_xlabel('Time of Day')
     axes[2].set_ylabel('Day of Week')
@@ -314,7 +325,7 @@ def plot_daily_profile(df, interval='30T', figsize=(15, 12)):
     axes[2].plot(x_indices, profile_rate.values, color='#2ca02c', linewidth=2)
     axes[2].set_title('Average Success Rate (Reliability)', fontsize=14)
     axes[2].set_ylabel('Rate (0-1)')
-    axes[2].set_ylim(-0.05, 1.05)
+    axes[2].set_ylim(0.84, 0.96)
     axes[2].grid(True, linestyle='--', alpha=0.5)
     
     # Smart X-Tick Formatting
@@ -499,56 +510,123 @@ def plot_rolling_statistics(df, window='1H', figsize=(20, 8)):
 
 def plot_anomaly_spikes(df, interval='5T', threshold_z=3):
     """
-    Detects and plots anomalies using Z-Score method.
+    Detects and plots anomalies using Z-Score method for:
+    1. Traffic Volume (Hits)
+    2. Total Bandwidth (Size)
+    3. Success Rate
+    
     Anomalies are points where (Value - Mean) / Std > threshold.
     """
     import matplotlib.pyplot as plt
     import numpy as np
+    import pandas as pd
+    from IPython.display import display
     
-    print("Detecting Anomalies...")
+    print(f"Detecting Anomalies (Interval: {interval}, Z-Threshold: {threshold_z})...")
     
     # 1. Prep Data
-    ts = df.resample(interval).size().fillna(0)
+    resampler = df.resample(interval)
     
-    # 2. Calculate Z-Score
-    # We use global mean/std for viewing overall outliers. 
-    # For local outliers, we'd use rolling logic (like above). 
-    # Let's stick to global outliers for "Extreme Events".
-    mean_val = ts.mean()
-    std_val = ts.std()
+    # A. Hits
+    ts_hits = resampler.size().fillna(0)
     
-    z_scores = (ts - mean_val) / std_val
+    # B. Size
+    ts_size = resampler['size'].sum().fillna(0)
     
-    # 3. Filter Anomalies
-    anomalies = ts[np.abs(z_scores) > threshold_z]
+    # C. Rate
+    if 'status_label' in df.columns:
+        ts_success = df[df['status_label'] == 'Success'].resample(interval).size()
+    else:
+        ts_success = df[(df['status'] >= 200) & (df['status'] < 300)].resample(interval).size()
+        
+    ts_rate = ts_success.div(ts_hits)
     
-    # 4. Plot
-    fig, ax = plt.subplots(figsize=(20, 8))
+    # Define metrics to loop over
+    # (Title, Series, Unit, Color)
+    metrics = [
+        ('Traffic Volume (Hits)', ts_hits, 'Hits', '#1f77b4'),
+        ('Total Bandwidth (Bytes)', ts_size, 'Bytes', '#ff7f0e'),
+        ('Success Rate', ts_rate, 'Rate (0-1)', '#2ca02c')
+    ]
     
-    # Normal Data
-    ax.plot(ts.index, ts, label='Normal Traffic', color='#1f77b4', alpha=0.6)
+    # 2. Plotting
+    fig, axes = plt.subplots(3, 1, figsize=(20, 18), sharex=True)
     
-    # Anomalies
-    ax.scatter(anomalies.index, anomalies, color='red', s=50, label=f'Anomalies (Z > {threshold_z})', zorder=5)
-    
-    # Threshold Line
-    ax.axhline(mean_val + (threshold_z * std_val), color='red', linestyle='--', alpha=0.5, label='Threshold Limit')
-    
-    ax.set_title(f'Anomaly Detection (Z-Score Method, Threshold={threshold_z})')
-    ax.set_ylabel(f'Hits per {interval}')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-    
-    # Annotate Top 3 Spikes
-    if len(anomalies) > 0:
-        top_3 = anomalies.sort_values(ascending=False).head(3)
-        for date, val in top_3.items():
-            ax.annotate(f'{int(val)} hits', 
-                        xy=(date, val), 
-                        xytext=(0, 10), 
-                        textcoords='offset points', 
-                        ha='center', fontsize=9, color='red', weight='bold')
+    for i, (name, series, unit, color) in enumerate(metrics):
+        ax = axes[i]
+        
+        # Clean series for stats (ignore NaNs in Rate which come from 0 hits)
+        clean_series = series.dropna()
+        
+        if len(clean_series) == 0:
+            ax.text(0.5, 0.5, "No Data", transform=ax.transAxes, ha='center')
+            continue
+            
+        mean_val = clean_series.mean()
+        std_val = clean_series.std()
+        
+        # Z-Score
+        if std_val > 0:
+            z_scores = (clean_series - mean_val) / std_val
+            anomalies = clean_series[np.abs(z_scores) > threshold_z]
+        else:
+            anomalies = pd.Series(dtype='float64')
 
+        # Plot Normal
+        ax.plot(series.index, series, label='Normal', color=color, alpha=0.6)
+        
+        # Plot Anomalies
+        if not anomalies.empty:
+            ax.scatter(anomalies.index, anomalies, color='red', s=50, label=f'Anomalies (Z > {threshold_z})', zorder=5)
+            
+            # Annotate Top 3
+            top_3 = anomalies.abs().sort_values(ascending=False).head(3) # Sort by magnitude (for Z-score, usually magnitude from mean)
+            # Actually, for the Series value itself, just sorting by value is often fine, 
+            # but for "Anomalies", usually the most extreme Z-scores are interesting.
+            # Let's just grab the 3 with highest deviation from mean.
+            # We already have the series values in `anomalies`.
+            
+            # Re-calculate specific Zs for sorting or just sort by value?
+            # For Rate: low is bad. For Hits: high is weird.
+            # Let's just sort by ABS(Z-score).
+            if std_val > 0:
+                z_anom = (anomalies - mean_val) / std_val
+                # Sort by absolute Z
+                top_3_idx = z_anom.abs().sort_values(ascending=False).head(3).index
+                top_3_vals = anomalies.loc[top_3_idx]
+                
+                for date, val in top_3_vals.items():
+                    ax.annotate(f'{val:.2f}' if unit=='Rate (0-1)' else f'{val:,.0f}', 
+                                xy=(date, val), 
+                                xytext=(0, 10), 
+                                textcoords='offset points', 
+                                ha='center', fontsize=9, color='red', weight='bold')
+
+        # Threshold Lines
+        ax.axhline(mean_val, color='black', linestyle='-', alpha=0.3, label='Mean')
+        ax.axhline(mean_val + (threshold_z * std_val), color='red', linestyle='--', alpha=0.3, label='Upper Bound')
+        ax.axhline(mean_val - (threshold_z * std_val), color='red', linestyle='--', alpha=0.3, label='Lower Bound')
+        
+        ax.set_title(f'{name} - Anomaly Detection')
+        ax.set_ylabel(unit)
+        ax.legend(loc='upper left')
+        ax.grid(True, alpha=0.3)
+        
+        # Print Top List
+        if not anomalies.empty:
+            print(f"\nTop Anomalies for {name}:")
+            # Sort by deviation magnitude
+            if std_val > 0:
+                z_anom = (anomalies - mean_val) / std_val
+                sorted_anoms = anomalies.loc[z_anom.abs().sort_values(ascending=False).index].head(5)
+                # Format
+                if unit == 'Rate (0-1)':
+                    display(sorted_anoms.map('{:.4f}'.format).to_frame(name=unit))
+                else:
+                    display(sorted_anoms.map('{:,.0f}'.format).to_frame(name=unit))
+
+    plt.xlabel('Date/Time')
+    plt.tight_layout()
     plt.show()
 
 def plot_status_evolution(df, interval='1D'):
@@ -636,6 +714,62 @@ def plot_autocorrelation(df, metric='hits', interval='1H', lags=72, figsize=(20,
     from statsmodels.graphics.tsaplots import plot_acf
 
     print(f"Calculating Autocorrelation for {metric}...")
+
+
+def plot_timeline_overview(df, interval='30T', figsize=(20, 12)):
+    """
+    Plots the Macro Overview over the entire timeline.
+    Shows 3 Line Plots: Total Hits, Total Size, and Success Rate over time.
+    """
+    import matplotlib.pyplot as plt
+    import pandas as pd
+    
+    print(f"Generating timeline overview for {interval} interval...")
+    
+    # 1. Resample
+    resampler = df.resample(interval)
+    
+    # Calculate metrics
+    ts_hits = resampler.size()
+    ts_size = resampler['size'].sum()
+    
+    # Success Rate
+    if 'status_label' in df.columns:
+        ts_success = df[df['status_label'] == 'Success'].resample(interval).size()
+    else:
+        # Fallback
+        ts_success = df[(df['status'] >= 200) & (df['status'] < 300)].resample(interval).size()
+        
+    # Calculate rate
+    # Fill NaN with 1.0 or 0.0? If no hits, rate is undefined. 
+    # Let's fill with forward fill or just leave gaps. Gaps are better.
+    ts_rate = ts_success.div(ts_hits)
+    
+    # 2. Plotting
+    fig, axes = plt.subplots(3, 1, figsize=figsize, sharex=True)
+    
+    # Plot 1: Hits
+    axes[0].plot(ts_hits.index, ts_hits.values, color='#1f77b4', linewidth=2)
+    axes[0].set_title(f'Total Hits per {interval}', fontsize=14)
+    axes[0].set_ylabel('Hits')
+    axes[0].grid(True, linestyle='--', alpha=0.5)
+    
+    # Plot 2: Size
+    axes[1].plot(ts_size.index, ts_size.values, color='#ff7f0e', linewidth=2)
+    axes[1].set_title('Total Size (Bytes)', fontsize=14)
+    axes[1].set_ylabel('Bytes')
+    axes[1].grid(True, linestyle='--', alpha=0.5)
+    
+    # Plot 3: Success Rate
+    axes[2].plot(ts_rate.index, ts_rate.values, color='#2ca02c', linewidth=2)
+    axes[2].set_title('Success Rate (Reliability)', fontsize=14)
+    axes[2].set_ylabel('Rate (0-1)')
+    # axes[2].set_ylim(0.0, 1.05) # Optional: fix range if desired
+    axes[2].grid(True, linestyle='--', alpha=0.5)
+    
+    plt.xlabel('Date/Time')
+    plt.tight_layout()
+    plt.show()
 
     # Prepare Time Series based on metric
     if metric == 'hits':
