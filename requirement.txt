@@ -1,7 +1,10 @@
-seaborn
+huggingface_hub
+streamlit
 matplotlib
+pandas
+numpy
+seaborn
 gspread
 torch
 statsmodels
 emd-signal
-streamlit

@@ -7,6 +7,7 @@ import torch.nn.functional as F
 import math
 import os
 
+from pathlib import Path
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using:", device)
@@ -212,60 +213,19 @@ class DL():
             raise ValueError(f"Unknown model name: {self.model_name}")
 
     def load_statedict(self):
-        # Resolve path relative to this file
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        artifact_path = os.path.join(current_dir, 'artifact', f'{self.model_name}.pt')
-        
-        if os.path.exists(artifact_path):
-            state_dict = torch.load(artifact_path, map_location=device)
-            self.model.load_state_dict(state_dict)
-            print(f"Loaded model from {artifact_path}")
-        else:
-            print(f"No checkpoint found at {artifact_path}, using randomized weights.")
+        if self.model_name == 'lstm':
+            model = LSTM(input_size=self.input_dim, output_size=1, dropout=0.5).to(device)
+        if self.model_name == 'bilstm_attention':
+            model = LSTMSelfAttention(input_size = self.input_dim).to(device)
 
-    def fit(self, X_train, y_train, X_val=None, y_val=None, epochs=50, batch_size=64, lr=1e-3):
-        X_train_tensor = torch.tensor(X_train, dtype=torch.float32)
-        y_train_tensor = torch.tensor(y_train, dtype=torch.float32).reshape(-1, 1)
-        
-        dataset = torch.utils.data.TensorDataset(X_train_tensor, y_train_tensor)
-        loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
-        
-        criterion = nn.MSELoss()
-        optimizer = optim.AdamW(self.model.parameters(), lr=lr)
-        
-        self.model.to(device)
-        for epoch in range(epochs):
-            self.model.train()
-            total_loss = 0
-            for Xb, yb in loader:
-                Xb, yb = Xb.to(device), yb.to(device)
-                optimizer.zero_grad()
-                preds = self.model(Xb)
-                loss = criterion(preds, yb)
-                loss.backward()
-                optimizer.step()
-                total_loss += loss.item()
-            
-            avg_loss = total_loss / len(loader)
-            
-            if X_val is not None and y_val is not None:
-                self.model.eval()
-                with torch.no_grad():
-                    X_val_tensor = torch.tensor(X_val, dtype=torch.float32).to(device)
-                    y_val_tensor = torch.tensor(y_val, dtype=torch.float32).reshape(-1, 1).to(device)
-                    val_preds = self.model(X_val_tensor)
-                    val_loss = criterion(val_preds, y_val_tensor)
-                print(f"Epoch {epoch+1}/{epochs}, Train Loss: {avg_loss:.4f}, Val Loss: {val_loss.item():.4f}")
-            else:
-                print(f"Epoch {epoch+1}/{epochs}, Train Loss: {avg_loss:.4f}")
 
-        # Save the model
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        artifact_dir = os.path.join(current_dir, 'artifact')
-        os.makedirs(artifact_dir, exist_ok=True)
-        artifact_path = os.path.join(artifact_dir, f'{self.model_name}.pt')
-        torch.save(self.model.state_dict(), artifact_path)
-        print(f"Model saved to {artifact_path}")
+        base_dir = Path(__file__).resolve().parent
+        artifact_dir = base_dir / "artifact"
+
+        state_dict = torch.load(artifact_dir/f'{self.model_name}.pt', map_location=torch.device('cpu'))
+        model.load_state_dict(state_dict)
+
+        return model
 
     def predict(self, X):
         self.load_statedict()

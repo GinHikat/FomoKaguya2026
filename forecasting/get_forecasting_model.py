@@ -5,7 +5,6 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import os, sys
-import pickle
 
 project_root = os.path.abspath(os.path.join(os.getcwd(), ".."))
 if project_root not in sys.path:
@@ -114,6 +113,7 @@ class Predictor():
         data_X = df[input_cols].values.astype(np.float32)
         data_y = df[target_col].values.astype(np.float32)
 
+
         for i in range(len(df) - self.window_size):
             X.append(data_X[i : i + self.window_size])
             y.append(data_y[i + self.window_size])
@@ -211,7 +211,7 @@ class Predictor():
         X_tensor = torch.tensor(X, dtype=torch.float32)
         y_tensor = torch.tensor(y, dtype=torch.float32).reshape(-1, 1)
 
-        return X, y
+        return X_tensor, y_tensor
 
     def arima_input(self, df, target = 'size'):
         '''

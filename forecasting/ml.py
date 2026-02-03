@@ -2,13 +2,17 @@ import pandas as pd
 import numpy as np
 import os, sys
 import pickle
+from pathlib import Path
 
 class ML():
     def __init__(self, model_name):
         self.model_name = model_name
 
     def load_archive(self):
-        with open(f'artifact/{self.model_name}.pkl', 'rb') as f:
+        base_dir = Path(__file__).resolve().parent
+        artifact_dir = base_dir / "artifact"
+
+        with open(artifact_dir/f'{self.model_name}.pkl', 'rb') as f:
             model = pickle.load(f)
 
         return model
