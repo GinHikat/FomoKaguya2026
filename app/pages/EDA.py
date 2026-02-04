@@ -32,7 +32,7 @@ col4.metric(
 
 st.subheader("Traffic Size Across Different Time Aggregation Intervals")
 interval= st.selectbox("Select the interval", ("1min", "5min", "15min", "60min", "combined"))
-if st.button("Submit"):
+if st.button("View result"):
     if interval == "combined":
         st.image("eda/img/overview.png")
 
@@ -48,7 +48,14 @@ if st.button("Submit"):
         st.image("eda/img/size_over_time_60_min.png")
 
 st.subheader("Daily Traffic & Reliability Patterns")
-st.image("eda/img/avg.png")
+daily= st.selectbox("Choose performance indicator", ("Daily hits", "Average success rate", "Average size"))
+if st.button("View image"):
+    if daily == "Daily hits":
+        st.image("eda/img/daily_profile_hits.png")
+    elif daily == "Average success rate":
+        st.image("eda/img/daily_profile_rate.png")
+    else:
+        st.image("eda/img/daily_profile_size.png")
 
 st.subheader("Request Intensity by Hour and Day")
 st.image("eda/img/heatmap.png")
