@@ -54,7 +54,7 @@ FomoKaguya2026/
 │   ├── plot.txt
 │   └── sample_ui.png
 ├── forecasting/              # ML, DL, and Statistical models
-│   ├── artifact/
+│   ├── artifact/             # Contains the models' checkpoints and state_dicts
 │   ├── arima.py
 │   ├── dl.py
 │   ├── get_forecasting_model.py
