@@ -224,6 +224,7 @@ class DPOptimizer:
         p_current_idx = self.prev_action_to_idx(0)
         
         timeline = []
+        previous_servers = self.min_servers  # Track previous for cost calculation
         
         for t in range(self.T):
             if s_idx == -1: break
@@ -232,15 +233,29 @@ class DPOptimizer:
             action = self.action_space[a_idx]
             
             s_tuple = self.states[s_idx]
+            servers_provisioned = sum(s_tuple)
+            servers_active = s_tuple[0]
+            load = self.load_data[t]
+            
+            # Calculate costs for this step
+            step_cost = self.cost_model.calculate_step_cost(
+                num_servers=servers_provisioned,
+                previous_servers=previous_servers,
+                load=load,
+                active_servers=servers_active
+            )
             
             timeline.append({
                 "time_step": t,
-                "servers": sum(s_tuple), 
-                "servers_active": s_tuple[0],
+                "servers_provisioned": servers_provisioned,
+                "servers_active": servers_active,
                 "action": action,
-                "load": self.load_data[t]
+                "load": load,
+                "costs": step_cost,
+                "policy": "DP Optimal"
             })
             
+            previous_servers = servers_provisioned
             s_idx = self.transitions[s_idx, a_idx]
             
             if action != 0:

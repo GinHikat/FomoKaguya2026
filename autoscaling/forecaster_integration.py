@@ -19,13 +19,12 @@ except ImportError:
     Predictor = None
 
 class Forecaster:
-    def __init__(self, model_name="bilstm_attention", interval="1min", window_size=60):
+    def __init__(self, model_name="bilstm_attention", interval="1min"):
         self.model_name = model_name
         self.interval = interval
-        self.window_size = window_size
         self.predictor = None
         if Predictor:
-            self.predictor = Predictor(model_name, interval, window_size)
+            self.predictor = Predictor(model_name, interval)
 
     def generate_forecasts(self, df_data):
         """
@@ -75,10 +74,9 @@ def get_forecasts(data_path, config):
     
     # Config parameters
     model_name = config.get("forecasting", {}).get("model", "bilstm_attention")
-    window_size = config.get("forecasting", {}).get("window_size", 60)
     interval = config.get("simulation", {}).get("interval", "1min")
     
-    forecaster = Forecaster(model_name=model_name, interval=interval, window_size=window_size)
+    forecaster = Forecaster(model_name=model_name, interval=interval)
     predictions, actuals = forecaster.generate_forecasts(df)
     
     return predictions, actuals

@@ -15,9 +15,9 @@ sys.modules['__main__'].RVFL = RVFL
 
 from forecasting.get_forecasting_model import Predictor
 
-processed_test= "data/processed/test.csv"
-
 # Expect that you run app.py in main dir
+
+processed_test= "data/processed/test.csv"
 
 st.title("Forecasting")
 
@@ -60,7 +60,7 @@ def predict_visualize(info, model_name):
     fig.tight_layout()
     return fig
 
-model_name= st.selectbox("Select the model", ("sarimax", "bilstm", "bilstm_attention", "rvfl", "d-rvfl", "de-rvfl"))
+model_name= st.selectbox("Select model", ("sarimax", "bilstm", "bilstm_attention", "rvfl", "d-rvfl", "de-rvfl"))
 interval= st.selectbox("Select interval", ("1min", "5min", "15min"))
 
 if st.button("Submit"):
@@ -81,9 +81,15 @@ if st.button("Submit"):
     r2 = r2_score(y_true, y_pred)
     mape = mean_absolute_percentage_error(y_true, y_pred)
 
-    df= pd.DataFrame({
-        'R^2 score': [r2],
-        'MAPE': [mape]
-    })
-    st.title("Evaluation results")
-    st.dataframe(df)
+    st.subheader("Evaluation results")
+    col1, col2= st.columns(2)
+
+    col1.metric(
+        label= "R^2",
+        value= r2
+    )
+
+    col2.metric(
+        label= "MAPE",
+        value= mape
+    )
