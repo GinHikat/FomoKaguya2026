@@ -86,10 +86,10 @@ if st.button("Submit"):
 
     col1.metric(
         label= "R^2",
-        value= r2
+        value= f"{r2:.2f}"
     )
 
     col2.metric(
         label= "MAPE",
-        value= mape
+        value= f"{mape:.2f}"
     )

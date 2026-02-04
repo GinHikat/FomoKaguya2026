@@ -339,6 +339,91 @@ def plot_daily_profile(df, interval='30T', figsize=(15, 12)):
     plt.show()
 
 
+def plot_daily_profile_split(df, interval='30T', figsize=(15, 4)):
+    """
+    Plots the Average Daily Profile (00:00–23:59) aggregated across all days.
+    Returns 3 separate matplotlib figures:
+    - fig_hits
+    - fig_size
+    - fig_rate
+    """
+    import matplotlib.pyplot as plt
+    import pandas as pd
+    import numpy as np
+    
+    print(f"Generating daily profile (Time of Day analysis) for {interval} interval...")
+    
+    # 1. Resample first to chunk data correctly into history buckets
+    resampler = df.resample(interval)
+    
+    # Calculate base metrics for every interval in history
+    ts_hits = resampler.size()
+    ts_size = resampler['size'].sum()
+    
+    # Success Rate calculation
+    if 'status_label' in df.columns:
+        ts_success = df[df['status_label'] == 'Success'].resample(interval).size()
+    else:
+        # Fallback
+        ts_success = df[(df['status'] >= 200) & (df['status'] < 300)].resample(interval).size()
+        
+    # Calculate rate for each historical interval
+    ts_rate = ts_success.div(ts_hits)
+    
+    # 2. Group by Time of Day and Aggregate (Mean)
+    # This collapses "July 1 10:00", "July 2 10:00"... into just "10:00"
+    profile_hits = ts_hits.groupby(ts_hits.index.time).mean()
+    profile_size = ts_size.groupby(ts_size.index.time).mean()
+    profile_rate = ts_rate.groupby(ts_rate.index.time).mean()
+    
+    # 3. Plotting
+    
+    # Prepare X-axis labels (convert time objects to strings)
+    times = [str(t) for t in profile_hits.index]
+    step = max(1, len(times) // 24)
+    x_indices = range(len(times))
+    
+    # Plot 1: Hits
+    fig_hits, ax1= plt.subplots(figsize= figsize)
+    ax1.plot(x_indices, profile_hits.values, color='#1f77b4', linewidth=2)
+    ax1.set_title(f'Average Hits by Time of Day (Aggregated per {interval})', fontsize=14)
+    ax1.set_ylabel('Avg Hits')
+    ax1.grid(True, linestyle='--', alpha=0.5)
+    ax1.set_xticks(x_indices[::step])
+    ax1.set_xticklabels(times[::step], rotation=45)
+    ax1.set_xlabel('Time of Day')
+    fig_hits.tight_layout()
+
+    
+    # Plot 2: Size
+    fig_size, ax2= plt.subplots(figsize= figsize)
+    ax2.plot(x_indices, profile_size.values, color='#ff7f0e', linewidth=2)
+    ax2.set_title('Average Total Size (Bytes)', fontsize=14)
+    ax2.set_ylabel('Bytes')
+    ax2.grid(True, linestyle='--', alpha=0.5)
+    ax2.set_xticks(x_indices[::step])
+    ax2.set_xticklabels(times[::step], rotation=45)
+    ax2.set_xlabel('Time of Day')
+    fig_size.tight_layout()
+    
+    # Plot 3: Success Rate
+    fig_rate, ax3= plt.subplots(figsize= figsize)
+    ax3.plot(x_indices, profile_rate.values, color='#2ca02c', linewidth=2)
+    ax3.set_title('Average Success Rate (Reliability)', fontsize=14)
+    ax3.set_ylabel('Rate (0-1)')
+    ax3.set_ylim(0.84, 0.96)
+    ax3.grid(True, linestyle='--', alpha=0.5)
+    ax3.set_xticks(x_indices[::step])
+    ax3.set_xticklabels(times[::step], rotation=45)
+    ax3.set_xlabel('Time of Day')
+    fig_rate.tight_layout()
+
+    return fig_hits, fig_size, fig_rate
+    
+
+
+
+
 def plot_file_type_stats(df, top_n=10, regex=r'\.([a-zA-Z0-9]+)$'):
     """
     Analyzes requests by File Extension (extracted from URL/Resource).
