@@ -5,6 +5,15 @@ import plotly.express as px
 from plotly.subplots import make_subplots
 import numpy as np
 
+plt.rcParams.update({
+    "text.color": "black",
+    "axes.labelcolor": "black",
+    "axes.titlecolor": "black",
+    "xtick.color": "black",
+    "ytick.color": "black",
+    "legend.edgecolor": "black"
+})
+
 # Modern color palette
 COLORS = {
     'primary': '#667eea',
@@ -15,6 +24,8 @@ COLORS = {
     'info': '#3b82f6',
     'gray': '#6b7280'
 }
+
+TEXT_COLOR = "black"
 
 def plot_simulation_timeline_plotly(results_dict, load_data, predictions=None, anomalies=None):
     """
@@ -173,32 +184,61 @@ def plot_simulation_timeline_plotly(results_dict, load_data, predictions=None, a
     
     
     # Enhanced Layout with separate legends for each subplot
+    # fig.update_layout(
+    #     title={
+    #         'text': "<b>Autoscaling Simulation Timeline</b>",
+    #         'font': {'size': 24, 'family': 'Inter, sans-serif'}
+    #     },
+    #     height=800,
+    #     hovermode="x unified",
+    #     showlegend=True,
+    #     legend=dict(
+    #         # This will be overridden by trace-specific legend assignments
+    #         orientation="v",
+    #         yanchor="top",
+    #         y=0.98,
+    #         xanchor="left",
+    #         x=1.01,
+    #         bgcolor='rgba(255,255,255,0.9)',
+    #         bordercolor='rgba(0,0,0,0.1)',
+    #         borderwidth=1,
+    #         font=dict(size=10)
+    #     ),
+    #     plot_bgcolor='rgba(250,250,250,0.5)',
+    #     paper_bgcolor='white',
+    #     font=dict(family='Inter, sans-serif', size=12),
+    #     margin=dict(t=80, b=120, r=150)  # More space for legend on right
+    # )
+    
     fig.update_layout(
         title={
             'text': "<b>Autoscaling Simulation Timeline</b>",
-            'font': {'size': 24, 'family': 'Inter, sans-serif'}
+            'font': {'size': 24, 'family': 'Inter, sans-serif', 'color': TEXT_COLOR}
         },
-        height=800,
-        hovermode="x unified",
-        showlegend=True,
+        font=dict(
+            family='Inter, sans-serif',
+            size=12,
+            color=TEXT_COLOR   # <-- GLOBAL TEXT COLOR
+        ),
         legend=dict(
-            # This will be overridden by trace-specific legend assignments
             orientation="v",
             yanchor="top",
             y=0.98,
             xanchor="left",
             x=1.01,
             bgcolor='rgba(255,255,255,0.9)',
-            bordercolor='rgba(0,0,0,0.1)',
+            bordercolor='rgba(0,0,0,0.2)',
             borderwidth=1,
-            font=dict(size=10)
+            font=dict(color=TEXT_COLOR, size=10)  # <-- LEGEND TEXT
         ),
         plot_bgcolor='rgba(250,250,250,0.5)',
         paper_bgcolor='white',
-        font=dict(family='Inter, sans-serif', size=12),
-        margin=dict(t=80, b=120, r=150)  # More space for legend on right
+        margin=dict(t=80, b=120, r=150),
+        hovermode="x unified",
+        showlegend=True
     )
-    
+
+
     # Assign traces to specific legend groups
     # Row 1 traces (Traffic & Forecast) -> legend 1
     # Row 2 traces (Servers) -> legend 2
@@ -238,11 +278,26 @@ def plot_simulation_timeline_plotly(results_dict, load_data, predictions=None, a
         showgrid=True,
         title_standoff=10  # More space between axis and label
     )
+
+    fig.update_xaxes(
+        title_font=dict(color=TEXT_COLOR),
+        tickfont=dict(color=TEXT_COLOR)
+    )
+
+    fig.update_yaxes(
+        title_font=dict(color=TEXT_COLOR),
+        tickfont=dict(color=TEXT_COLOR)
+    )
+
     
     # Update subplot title styling
+    # for annotation in fig.layout.annotations:
+    #     annotation.font.size = 16
+    #     annotation.font.family = 'Inter, sans-serif'
     for annotation in fig.layout.annotations:
         annotation.font.size = 16
         annotation.font.family = 'Inter, sans-serif'
+        annotation.font.color = TEXT_COLOR
     
     return fig
 
@@ -277,15 +332,41 @@ def plot_cost_comparison_plotly(summary_df):
         ))
     
     # Enhanced layout
+    # fig.update_layout(
+    #     title={
+    #         'text': "<b>Total Cost Breakdown by Policy</b>",
+    #         'font': {'size': 20, 'family': 'Inter, sans-serif'}
+    #     },
+    #     barmode='stack',
+    #     height=500,
+    #     xaxis_title="<b>Policy</b>",
+    #     yaxis_title="<b>Cost ($)</b>",
+    #     legend=dict(
+    #         orientation="h",
+    #         yanchor="bottom",
+    #         y=1.02,
+    #         xanchor="right",
+    #         x=1,
+    #         bgcolor='rgba(255,255,255,0.9)',
+    #         bordercolor='rgba(0,0,0,0.1)',
+    #         borderwidth=1
+    #     ),
+    #     plot_bgcolor='rgba(250,250,250,0.5)',
+    #     paper_bgcolor='white',
+    #     font=dict(family='Inter, sans-serif', size=12),
+    #     hovermode='x unified'
+    # )
+    
     fig.update_layout(
         title={
             'text': "<b>Total Cost Breakdown by Policy</b>",
-            'font': {'size': 20, 'family': 'Inter, sans-serif'}
+            'font': {'size': 20, 'family': 'Inter, sans-serif', 'color': TEXT_COLOR}
         },
-        barmode='stack',
-        height=500,
-        xaxis_title="<b>Policy</b>",
-        yaxis_title="<b>Cost ($)</b>",
+        font=dict(
+            family='Inter, sans-serif',
+            size=12,
+            color=TEXT_COLOR
+        ),
         legend=dict(
             orientation="h",
             yanchor="bottom",
@@ -293,15 +374,23 @@ def plot_cost_comparison_plotly(summary_df):
             xanchor="right",
             x=1,
             bgcolor='rgba(255,255,255,0.9)',
-            bordercolor='rgba(0,0,0,0.1)',
-            borderwidth=1
+            bordercolor='rgba(0,0,0,0.2)',
+            borderwidth=1,
+            font=dict(color=TEXT_COLOR)
         ),
         plot_bgcolor='rgba(250,250,250,0.5)',
         paper_bgcolor='white',
-        font=dict(family='Inter, sans-serif', size=12),
-        hovermode='x unified'
+        hovermode='x unified',
+        height=500,
+        barmode='stack',
+        xaxis_title="<b>Policy</b>",
+        yaxis_title="<b>Cost ($)</b>"
     )
-    
+
+    fig.update_xaxes(title_font=dict(color=TEXT_COLOR), tickfont=dict(color=TEXT_COLOR))
+    fig.update_yaxes(title_font=dict(color=TEXT_COLOR), tickfont=dict(color=TEXT_COLOR))
+
+
     # Add total cost annotations on top of bars
     totals = df["Total Cost"].values
     for i, (policy, total) in enumerate(zip(df["Policy"], totals)):
@@ -353,8 +442,9 @@ def plot_simulation_timeline(results_dict, load_data, predictions=None, save_pat
             linewidth=2
         )
 
-    ax2.set_ylabel("Traffic Load (Bytes/min)", color=COLORS['gray'], fontweight='bold')
-    ax2.tick_params(axis='y', labelcolor=COLORS['gray'])
+    ax2.set_ylabel("Traffic Load (Bytes/min)", color='black', fontweight='bold')
+    ax2.tick_params(axis='y', labelcolor='black')
+
     ax2.grid(False)
     
     # Plot Servers with enhanced colors
@@ -388,6 +478,14 @@ def plot_simulation_timeline(results_dict, load_data, predictions=None, save_pat
     # Enhanced legends
     ax1.legend(loc="upper left", framealpha=0.95, edgecolor='lightgray')
     ax2.legend(loc="upper right", framealpha=0.95, edgecolor='lightgray')
+
+    leg1 = ax1.legend(loc="upper left", framealpha=0.95, edgecolor='black')
+    leg2 = ax2.legend(loc="upper right", framealpha=0.95, edgecolor='black')
+
+    for leg in [leg1, leg2]:
+        for text in leg.get_texts():
+            text.set_color('black')
+
     
     # Grid styling
     ax1.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.3, color='gray')
