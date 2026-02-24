@@ -162,18 +162,10 @@ class HybridPolicy(ScalingPolicy):
                  
         # Scale In Decision (using Lower Bound)
         elif pred_util_low < self.thresholds["in"]:
-             # Hysteresis Check: Do not scale in if we recently scaled out.
-             # "LAST{Last Action was SCALE_OUT?} --> Yes --> NO_ACTION"
-             # "LAST{Last Action was SCALE_OUT?} --> No --> SCALE_IN"
-             last_action_type = kwargs.get("last_action_type", 0)
-             
-             if last_action_type == 1:
-                 action = 0
-                 reason = "Hysteresis Block"
-             elif current_servers > self.min_servers:
-                 action = -1
-                 reason = "Low Predicted Load"
-                 
+            if current_servers > self.min_servers:
+                action = -1
+                reason = "Low Predicted Load"
+                        
         new_servers = np.clip(current_servers + action, self.min_servers, self.max_servers)
         return {"action": new_servers - current_servers, "new_servers": new_servers, "reason": reason}
 

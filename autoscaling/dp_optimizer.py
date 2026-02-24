@@ -23,7 +23,7 @@ class DPOptimizer:
         # Example: boot_time=3. Queue=[P1, P2]. P1 active next step. P2 active in 2 steps.
         # Action determines what enters P_last.
         
-        self.queue_len = max(0, self.boot_time - 1)
+        self.queue_len = self.boot_time
         
         print(f"Generating DP State Space (Queue Len={self.queue_len})...")
         
