@@ -1,0 +1,253 @@
+---
+title: "Advanced Spatial-Temporal EDA: NASA WWW Server Logs"
+subtitle: "Applied Statistical Inference, Spectral Analysis, and Unsupervised Learning"
+author: "Nguyen Lam Tung"
+date: "`r Sys.Date()`"
+output: 
+  rmdformats::readthedown:
+    highlight: espresso
+    code_download: TRUE
+    code_folding: show
+    toc_depth: 3
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.dim = c(10, 7), fig.align = "center", out.width = "100%", fig.path = "rplots/")
+```
+
+```{r libraries}
+library(tidyverse)
+library(lubridate)
+library(MASS)
+library(fitdistrplus)
+library(WaveletComp)
+library(kohonen)
+library(dbscan)
+library(factoextra)
+library(copula)
+library(evd)
+library(epiR)
+library(gridExtra)
+library(plotly)
+```
+
+# 1. Data Loading & Preparation
+
+We load the processed training data and calculate inter-arrival times for distribution analysis.
+
+```{r load_data}
+# Define paths
+data_dir <- "../data/processed"
+train_path <- file.path(data_dir, "train.csv")
+
+# Load data
+df <- read_csv(train_path) %>% 
+  mutate(time = as_datetime(time)) %>% 
+  arrange(time)
+
+# Calculate inter-arrival times (in seconds)
+df <- df %>%
+  mutate(inter_arrival = as.numeric(difftime(time, lag(time), units = "secs"))) %>%
+  filter(!is.na(inter_arrival))
+
+# Subset for heavy computations (Spectral/Clustering)
+set.seed(123)
+df_sample <- df %>% sample_n(100000)
+```
+
+---
+
+# 2. Parametric Probability Distributions
+
+## 2.1 Inter-Arrival Times (Exponential/Gamma)
+According to queuing theory, inter-arrival times often follow an Exponential or Gamma distribution.
+
+```{r inter_arrival_dist}
+# Filter zero arrivals for Gamma fitting
+iat_clean <- df$inter_arrival[df$inter_arrival > 0]
+
+# Fit Exponential
+fit_exp <- fitdist(iat_clean, "exp")
+# Fit Gamma
+fit_gamma <- fitdist(iat_clean, "gamma")
+
+plot(fit_gamma)
+summary(fit_gamma)
+```
+
+## 2.2 Extreme Values (GEV) in Request Sizes
+We analyze the distribution of request sizes, specifically looking at the tail behavior using Generalized Extreme Value (GEV) theory.
+
+```{r size_evd}
+# Daily Maxima of file sizes
+daily_max <- df %>%
+  mutate(date = as_date(time)) %>%
+  group_by(date) %>%
+  summarise(max_size = max(size, na.rm = TRUE))
+
+fit_gev <- evd::fgev(daily_max$max_size, std.err = FALSE)
+print(fit_gev)
+
+# Plotting the GEV distribution against daily maxima
+hist(daily_max$max_size, prob = TRUE, main = "Daily Maximum Request Sizes vs. GEV Fit", breaks = 20)
+# Accessing estimates properly (they are in fit_gev$estimate)
+curve(evd::dgev(x, loc = fit_gev$estimate[1], scale = fit_gev$estimate[2], shape = fit_gev$estimate[3]), add = TRUE, col = "red", lwd = 2)
+```
+
+---
+
+# 3. Joint Distributions & Copulas
+
+We explore the dependency between the number of requests (frequency) and the average size of data transferred per hour using a Gaussian Copula.
+
+```{r copula_analysis}
+# Aggregate hourly
+hourly_stats <- df %>%
+  mutate(hour_bin = floor_date(time, "1 hour")) %>%
+  group_by(hour_bin) %>%
+  summarise(freq = n(), avg_size = mean(size, na.rm = TRUE))
+
+# Transform to Uniform [0,1]
+u_freq <- rank(hourly_stats$freq) / (nrow(hourly_stats) + 1)
+u_size <- rank(hourly_stats$avg_size) / (nrow(hourly_stats) + 1)
+cop_df <- data.frame(u_freq, u_size)
+
+# Calculate Correlation in Normal space
+rho <- cor(qnorm(u_freq), qnorm(u_size), method = "pearson")
+
+# Visualize Copula Space
+ggplot(cop_df, aes(x = u_freq, y = u_size)) +
+  geom_point(alpha = 0.5, color = "darkgreen") +
+  geom_density_2d(color = "black") +
+  labs(title = "Gaussian Copula Space (Uniform Marginals)", 
+       subtitle = paste("rho =", round(rho, 3)),
+       x = "U(Frequency)", y = "U(Avg Size)") +
+  theme_minimal()
+```
+
+---
+
+# 4. Frequentist Inference & Testing
+
+## 4.1 Two-Sample t-test: Weekday vs. Weekend
+**Hypothesis**: Does the mean traffic volume per hour differ significantly between weekdays and weekends?
+
+```{r t_test_traffic}
+hourly_stats <- hourly_stats %>%
+  mutate(is_weekend = wday(hour_bin) %in% c(1, 7))
+
+t_res <- t.test(freq ~ is_weekend, data = hourly_stats)
+print(t_res)
+
+ggplot(hourly_stats, aes(x = is_weekend, y = freq, fill = is_weekend)) +
+  geom_boxplot() +
+  labs(title = "Hourly Requests: Weekday vs. Weekend", x = "Is Weekend", y = "Hits/Hour") +
+  theme_minimal()
+```
+
+---
+
+# 5. Discrete Predictands & Forecast Verification
+
+We define a "High Load" event as an hour where traffic exceeds the 90th percentile. We evaluate a simple persistence forecast (If previous hour was High Load, next hour will be).
+
+```{r forecast_verification}
+threshold <- quantile(hourly_stats$freq, 0.90)
+hourly_stats <- hourly_stats %>%
+  mutate(obs_high = ifelse(freq > threshold, 1, 0),
+         pred_high = lag(obs_high, default = 0))
+
+# 2x2 Contingency Table
+skill_tab <- table(factor(hourly_stats$pred_high, levels = c(1, 0)), 
+                   factor(hourly_stats$obs_high, levels = c(1, 0)))
+
+# Calculate Skill Scores
+a <- skill_tab[1, 1]; b <- skill_tab[1, 2]; c <- skill_tab[2, 1]; d <- skill_tab[2, 2]; n <- sum(skill_tab)
+pc <- (a + d) / n
+bias <- (a + b) / (a + c)
+pod <- a / (a + c)
+far <- b / (a + b)
+hss <- 2 * (a * d - b * c) / ((a + c) * (c + d) + (a + b) * (b + d))
+
+cat("Accuracy (PC):", round(pc, 3), "
+")
+cat("Bias Score:", round(bias, 3), "
+")
+cat("Hit Rate (POD):", round(pod, 3), "
+")
+cat("False Alarm Ratio (FAR):", round(far, 3), "
+")
+cat("Heidke Skill Score (HSS):", round(hss, 3), "
+")
+```
+
+---
+
+# 6. Spectral & Wavelet Analysis
+
+We analyze the periodicity of traffic hits (15-minute resolution) to identify rhythms. **Observation:** The Wavelet Scalogram reveals strong, persistent horizontal bands at the 24-hour period mark (approximately index 96). This confirms that the traffic is dominated by highly regular daily cycles. Narrower "flare" patterns suggest transient, high-frequency bursts of activity that deviate from the standard rhythm.
+
+```{r wavelet_analysis}
+# Aggregate 15m
+ts_15m <- df %>%
+  mutate(time_15 = floor_date(time, "15 minutes")) %>%
+  group_by(time_15) %>%
+  summarise(hits = n())
+
+# Wavelet Transform
+w_res <- analyze.wavelet(ts_15m, "hits", dt = 1, loess.span = 0, verbose = FALSE)
+
+# Average Power Spectrum
+wt.avg(w_res, main = "Average Wavelet Power (Periodicity Analysis)")
+
+# Scalogram (Subset for visualization clarity)
+wt.image(w_res, main = "Wavelet Scalogram (Time-Frequency)")
+```
+
+---
+
+# 7. Unsupervised Learning: IP Behavior Profiling
+
+We profile IPs based on their average request size, frequency, and error rate, then cluster them. **Observation:** 
+- **PCA Analysis:** Most IPs are clustered near the origin, representing standard user behavior. Outliers extending along the axes represent distinct archetypes: those with extremely high request counts (automated bots) and those with high error rates.
+- **Clustering:** The K-Means algorithm effectively separates these behaviors. Cluster 1 identifies high-volume bots, while other clusters highlight IPs consuming significant bandwidth or generating disproportionate error counts.
+
+```{r ip_profiling}
+ip_profile <- df %>%
+  group_by(ip) %>%
+  summarise(
+    total_req = n(),
+    avg_size = mean(size, na.rm = TRUE),
+    error_rate = sum(status_label != "Success", na.rm = TRUE) / n()
+  ) %>%
+  filter(total_req > 10) %>% # Filter noise
+  na.omit() %>%
+  column_to_rownames("ip")
+
+# Scale for clustering/PCA/SOM
+ip_scaled <- scale(ip_profile)
+# Remove columns that became NaN due to zero variance
+ip_scaled <- ip_scaled[, colSums(is.na(ip_scaled)) == 0]
+
+# 7.1 PCA
+pca_res <- prcomp(ip_scaled)
+fviz_pca_biplot(pca_res, label = "var", title = "PCA of IP Behaviors")
+
+# 7.2 K-Means Clustering
+set.seed(123)
+km_res <- kmeans(ip_scaled, centers = 4, nstart = 25)
+fviz_cluster(km_res, data = ip_scaled, geom = "point", title = "K-Means: IP Behavior Clusters")
+
+# 7.3 SOM (Self-Organizing Maps)
+som_grid <- somgrid(xdim = 5, ydim = 5, topo = "hexagonal")
+som_model <- som(ip_scaled, grid = som_grid, rlen = 100)
+plot(som_model, type = "codes", main = "SOM: IP Behavior Archetypes")
+```
+
+# 8. Conclusion
+
+This advanced EDA reveals:
+1.  **Stationarity**: Traffic exhibits strong daily cycles (confirmed by Wavelet peaks at ~96 periods for 15m data).
+2.  **IP Archetypes**: Clustering and SOM identified distinct groups of users (High Bandwidth vs. High Error vs. Standard).
+3.  **Forecasting**: Persistence is a moderately strong baseline for load prediction (HSS > 0).
+4.  **Extremes**: Request sizes follow an Extreme Value distribution, indicating the risk of very large bursts.
