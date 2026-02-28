@@ -1,13 +1,14 @@
-# DataFlow 2026: Intelligent System Autoscaling & Forecasting
+# Intelligent System Autoscaling & Forecasting
 
 ## Team Information
-
-FomoKaguya
 
 1. Phạm Duy Anh
 2. Hoàng Khánh Đồng
 3. Nguyễn Vũ Hồng Ngọc
 4. Nguyễn Lâm Tùng
+--- Consultant ---
+6. Lê Chí Thanh Lâm
+7. Phạm Quang Vinh
 
 ## Introduction
 
