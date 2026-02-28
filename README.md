@@ -6,9 +6,11 @@
 2. Hoàng Khánh Đồng
 3. Nguyễn Vũ Hồng Ngọc
 4. Nguyễn Lâm Tùng
+
 --- Consultant ---
-6. Lê Chí Thanh Lâm
-7. Phạm Quang Vinh
+
+5. Lê Chí Thanh Lâm
+6. Phạm Quang Vinh
 
 ## Introduction
 
