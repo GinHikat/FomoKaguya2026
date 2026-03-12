@@ -968,12 +968,12 @@ def plot_frequency_vs_size(df, figsize=(12, 8)):
 
     plt.show()
 
-
+"""
 def plot_weekday_vs_weekend(df, interval='1H', figsize=(12, 6)):
-    """
-    Hypothesis: Traffic at weekday < traffic at weekend.
-    Plots distribution of hits comparing Weekdays vs Weekends.
-    """
+
+    # Hypothesis: Traffic at weekday < traffic at weekend.
+    # Plots distribution of hits comparing Weekdays vs Weekends.
+
     import matplotlib.pyplot as plt
     import seaborn as sns
     import pandas as pd
@@ -1004,12 +1004,84 @@ def plot_weekday_vs_weekend(df, interval='1H', figsize=(12, 6)):
     axes[0].set_ylabel('Hits')
     
     # Barplot for Means
-    means.plot(kind='bar', ax=axes[1], color=['#66c2a5', '#fc8d62'], alpha=0.8)
+    means.plot(kind='bar', ax=axes[1], color=['#fc8d62', '#66c2a5'], alpha=0.8)
     axes[1].set_title('Average Traffic: Weekday vs Weekend')
     axes[1].set_ylabel('Average Hits')
     axes[1].tick_params(axis='x', rotation=0)
     
     # Annotate means
+    for i, v in enumerate(means):
+        axes[1].text(i, v, f'{v:.0f}', ha='center', va='bottom', fontweight='bold')
+
+    plt.tight_layout()
+    plt.show()
+"""
+def plot_weekday_vs_weekend(df, interval='1H', figsize=(12, 6)):
+    """
+    Hypothesis: Traffic on weekdays < traffic on weekends.
+    Compare hit distributions between weekdays and weekends.
+    """
+
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import pandas as pd
+
+    print("Comparing Weekday vs Weekend Traffic...")
+
+    # Ensure datetime index
+    if not isinstance(df.index, pd.DatetimeIndex):
+        raise ValueError("DataFrame index must be DatetimeIndex for resampling.")
+
+    # 1. Resample traffic counts
+    ts = df.resample(interval).size()
+
+    # 2. Build analysis dataframe
+    analysis = pd.DataFrame({'hits': ts})
+    analysis = analysis.dropna()
+
+    analysis['is_weekend'] = analysis.index.dayofweek >= 5
+    analysis['Category'] = analysis['is_weekend'].map({
+        True: 'Weekend',
+        False: 'Weekday'
+    })
+
+    # 3. Calculate means
+    means = analysis.groupby('Category')['hits'].mean()
+
+    print("\nMean Traffic per Interval:")
+    print(means)
+
+    # 4. Plot
+    fig, axes = plt.subplots(1, 2, figsize=figsize)
+
+    # Boxplot
+    sns.boxplot(
+        x='Category',
+        y='hits',
+        data=analysis,
+        ax=axes[0],
+        hue='Category',
+        palette='Set2',
+        legend=False
+    )
+
+    axes[0].set_title(f'Traffic Distribution ({interval})')
+    axes[0].set_xlabel('')
+    axes[0].set_ylabel('Hits')
+
+    # Barplot (means)
+    means.plot(
+        kind='bar',
+        ax=axes[1],
+        color=['#fc8d62', '#66c2a5'],
+        alpha=0.8
+    )
+
+    axes[1].set_title('Average Traffic: Weekday vs Weekend')
+    axes[1].set_ylabel('Average Hits')
+    axes[1].tick_params(axis='x', rotation=0)
+
+    # Annotate mean values
     for i, v in enumerate(means):
         axes[1].text(i, v, f'{v:.0f}', ha='center', va='bottom', fontweight='bold')
 
